@@ -2,6 +2,7 @@ services:
   # Web Backend Service (Django API)
   - type: web
     name: report-django-backend
+    plan: free
     env: python
     buildCommand: |
       cd backend
@@ -32,9 +33,8 @@ services:
         sync: false
 
   # Frontend (Static Site)
-  - type: web
+  - type: static
     name: report-react-frontend
-    env: static
     buildCommand: |
       cd frontend
       npm install
@@ -47,5 +47,6 @@ services:
 
 databases:
   - name: report-postgres-db
+    plan: free
     databaseName: report_db
     user: report_user
