@@ -1,0 +1,44 @@
+フォルダー パスの一覧:  ボリューム OS
+ボリューム シリアル番号は 8C5B-4C3D です
+C:.
+│  db.sqlite3
+│  manage.py
+│  requirements.txt
+│  test.txt
+│  
+├─config
+│  │  asgi.py
+│  │  settings.py
+│  │  urls.py
+│  │  wsgi.py
+│  │  __init__.py
+│  │  
+│  └─__pycache__
+│          settings.cpython-312.pyc
+│          urls.cpython-312.pyc
+│          wsgi.cpython-312.pyc
+│          __init__.cpython-312.pyc
+│          
+├─reports
+│  │  admin.py
+│  │  apps.py
+│  │  models.py
+│  │  s3_utils.py
+│  │  serializers.py
+│  │  urls.py
+│  │  views.py
+│  │  __init__.py
+│  │  
+│  └─__pycache__
+│          admin.cpython-312.pyc
+│          apps.cpython-312.pyc
+│          models.cpython-312.pyc
+│          s3_utils.cpython-312.pyc
+│          serializers.cpython-312.pyc
+│          urls.cpython-312.pyc
+│          views.cpython-312.pyc
+│          __init__.cpython-312.pyc
+│          
+└─__pycache__
+        manage.cpython-312.pyc
+        
