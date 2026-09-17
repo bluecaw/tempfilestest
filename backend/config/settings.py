@@ -120,6 +120,8 @@ if not CORS_ALLOW_ALL_ORIGINS:
     CORS_ALLOWED_ORIGINS = [
         origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()
     ]
+    # Django 4.x の CSRF 対策として信頼するオリジンを設定
+    CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 # Cloudflare R2 Credentials
 R2_ACCOUNT_ID = os.environ.get('R2_ACCOUNT_ID', '')
