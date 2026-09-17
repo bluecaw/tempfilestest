@@ -32,9 +32,11 @@ services:
       - key: R2_BUCKET
         sync: false
 
-  # Frontend (Static Site)
-  - type: static
+  # Frontend (Static Site / Web Service as static/SPA)
+  - type: web
     name: report-react-frontend
+    plan: free
+    env: static
     buildCommand: |
       cd frontend
       npm install
@@ -44,9 +46,3 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
-
-databases:
-  - name: report-postgres-db
-    plan: free
-    databaseName: report_db
-    user: report_user
