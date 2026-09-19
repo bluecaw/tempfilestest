@@ -153,13 +153,9 @@ if not DEBUG:
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True  # Cookie を含むクロスオリジンリクエストを許可
 if not CORS_ALLOW_ALL_ORIGINS:
-    allowed_origins = [origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()]
-    
-    # RenderのフロントエンドURLを追加（環境変数が未設定の場合のフォールバック）
-    if 'https://report-react-frontend.onrender.com' not in allowed_origins:
-        allowed_origins.append('https://report-react-frontend.onrender.com')
-        
-    CORS_ALLOWED_ORIGINS = allowed_origins
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()
+    ]
     # Django 4.x の CSRF 対策として信頼するオリジンを設定
     CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
