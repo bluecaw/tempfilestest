@@ -1,10 +1,67 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
+// -----------------------------------------------
+// axios グローバル設定: Cookie を自動送信
+// -----------------------------------------------
+axios.defaults.withCredentials = true;
+
+/**
+ * DjangoのCSRF Cookieから csrf トークンを取得するユーティリティ
+ */
+function getCsrfToken() {
+  const name = 'csrftoken';
+  const cookies = document.cookie.split(';');
+  for (let c of cookies) {
+    const trimmed = c.trim();
+    if (trimmed.startsWith(name + '=')) {
+      return decodeURIComponent(trimmed.slice(name.length + 1));
+    }
+  }
+  return '';
+}
+
+/**
+ * 認証が必要なリクエスト用 axios インスタンス
+ * X-CSRFToken ヘッダーを自動付与する
+ */
+const authAxios = axios.create({ withCredentials: true });
+authAxios.interceptors.request.use((config) => {
+  const csrfToken = getCsrfToken();
+  if (csrfToken) {
+    config.headers['X-CSRFToken'] = csrfToken;
+  }
+  return config;
+});
+
+// 401 レスポンス時に自動でリフレッシュを試みるインターセプター
+authAxios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/refresh/')
+    ) {
+      originalRequest._retry = true;
+      try {
+        await authAxios.post(`${API_BASE}/auth/refresh/`);
+        return authAxios(originalRequest);
+      } catch {
+        // リフレッシュ失敗 → ページをリロードしてログイン画面へ
+        window.location.reload();
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default function App() {
-  const [token, setToken] = useState(localStorage.getItem('jwt_token') || '');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
@@ -22,46 +79,63 @@ export default function App() {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [selectedReport, setSelectedReport] = useState(null);
 
-  // JWT ログイン処理
+
+  // -------------------------------------------
+  // 認証チェック: ページロード時に Cookie で認証状態を確認
+  // -------------------------------------------
+  const checkAuth = useCallback(async () => {
+    try {
+      const res = await authAxios.get(`${API_BASE}/reports/`);
+      setIsAuthenticated(true);
+      setReports(res.data);
+    } catch {
+      setIsAuthenticated(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  // Cookie ベース ログイン処理
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post(`${API_BASE}/auth/token/`, { username, password });
-      setToken(res.data.access);
-      localStorage.setItem('jwt_token', res.data.access);
+      const res = await authAxios.post(`${API_BASE}/auth/login/`, { username, password });
+      setIsAuthenticated(true);
+      setCurrentUser(res.data.username || username);
       setMessage({ type: 'success', text: 'ログインしました。' });
+      // ログイン後にデータを取得
+      fetchReports();
     } catch (err) {
       setMessage({ type: 'error', text: 'ログイン失敗: ユーザー名またはパスワードを確認してください。' });
     }
   };
 
-  // ログアウト処理
-  const handleLogout = () => {
-    setToken('');
-    localStorage.removeItem('jwt_token');
+  // ログアウト処理: サーバーに logout エンドポイントを呼び Cookie を削除
+  const handleLogout = async () => {
+    try {
+      await authAxios.post(`${API_BASE}/auth/logout/`);
+    } catch {
+      // エラーでもローカル状態はリセット
+    }
+    setIsAuthenticated(false);
+    setCurrentUser('');
     setReports([]);
     setMessage({ type: 'info', text: 'ログアウトしました。' });
   };
 
   // 報告一覧の取得
   const fetchReports = async () => {
-    if (!token) return;
     try {
-      const res = await axios.get(`${API_BASE}/reports/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await authAxios.get(`${API_BASE}/reports/`);
       setReports(res.data);
     } catch (err) {
-      // 401 または token_not_valid の場合はログアウト扱いにすル
-      if (err.response?.status === 401 || err.response?.data?.code === 'token_not_valid') {
-        handleLogout();
+      if (err.response?.status === 401) {
+        setIsAuthenticated(false);
       }
     }
   };
-
-  useEffect(() => {
-    fetchReports();
-  }, [token]);
 
   // フォーム入力変更
   const handleInputChange = (e) => {
@@ -76,15 +150,13 @@ export default function App() {
   // 業務報告登録 ＆ ファイル一括アップロード
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!token) return;
+    if (!isAuthenticated) return;
     setLoading(true);
     setMessage({ type: '', text: '' });
 
     try {
       // 1. Report 作成
-      const reportRes = await axios.post(`${API_BASE}/reports/`, formData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const reportRes = await authAxios.post(`${API_BASE}/reports/`, formData);
       const reportId = reportRes.data.id;
 
       // 2. 各添付ファイルのアップロード
@@ -93,11 +165,8 @@ export default function App() {
         uploadData.append('report_id', reportId);
         uploadData.append('file', file);
 
-        await axios.post(`${API_BASE}/attachments/`, uploadData, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data'
-          }
+        await authAxios.post(`${API_BASE}/attachments/`, uploadData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
         });
       }
 
@@ -122,9 +191,7 @@ export default function App() {
   // 添付ファイルダウンロード処理
   const handleDownloadAttachment = async (attId) => {
     try {
-      const res = await axios.get(`${API_BASE}/attachments/${attId}/download/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await authAxios.get(`${API_BASE}/attachments/${attId}/download/`);
       if (res.data.is_mock) {
         alert(`モック環境: ${res.data.message}\nKey: ${res.data.r2_key}`);
         return;
@@ -137,7 +204,8 @@ export default function App() {
     }
   };
 
-  if (!token) {
+
+  if (!isAuthenticated) {
     return (
       <div className="login-wrapper">
         <div className="login-card glass-panel">
@@ -185,6 +253,7 @@ export default function App() {
           <h1>業務報告管理システム</h1>
         </div>
         <div className="header-right">
+          {currentUser && <span className="user-badge">👤 {currentUser}</span>}
           <span className="status-indicator">● オンライン</span>
           <button onClick={handleLogout} className="btn-outline">ログアウト</button>
         </div>
