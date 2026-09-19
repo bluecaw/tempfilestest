@@ -27,7 +27,6 @@ INSTALLED_APPS = [
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     
     # Local apps
@@ -99,8 +98,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # REST Framework Settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        # Cookie 内の JWT を優先し、なければ Authorization ヘッダーにフォールバック
-        'reports.authentication.CookieJWTAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -116,42 +114,8 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# JWT Cookie Settings
-AUTH_COOKIE = 'access_token'          # アクセストークンの Cookie 名
-AUTH_COOKIE_REFRESH = 'refresh_token'  # リフレッシュトークンの Cookie 名
-AUTH_COOKIE_SECURE = not DEBUG         # HTTPS時のみ送信（本番璲境で True）
-AUTH_COOKIE_HTTP_ONLY = True           # JavaScript からアクセス不可
-AUTH_COOKIE_SAMESITE = 'Lax'           # CSRF 対策：SameOrigin のリクエストのみ Cookie を送信
-
-# --------------------------------
-# Cookie ・セッション セキュリティ設定
-# --------------------------------
-
-# セッション Cookie
-SESSION_COOKIE_HTTPONLY = True           # JavaScript からセッション Cookie へアクセス不可
-SESSION_COOKIE_SECURE = not DEBUG        # 本番璲境では HTTPS のみ
-SESSION_COOKIE_SAMESITE = 'Lax'         # CSRF 対策
-SESSION_COOKIE_AGE = 60 * 60 * 24 * 7   # 7日間
-
-# CSRF Cookie
-CSRF_COOKIE_HTTPONLY = False    # フロントエンドが JavaScript で読み取れるよう False
-CSRF_COOKIE_SECURE = not DEBUG  # 本番璲境では HTTPS のみ
-CSRF_COOKIE_SAMESITE = 'Lax'   # CSRF 対策
-
-# X-Frame-Options ヘッダー（クリックジャッキング対策）
-X_FRAME_OPTIONS = 'DENY'
-
-# HTTP Strict Transport Security （本番璲境のみ有効化）
-if not DEBUG:
-    SECURE_HSTS_SECONDS = 31536000      # 1年
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    SECURE_SSL_REDIRECT = True          # HTTP → HTTPS リダイレクト
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Render でのプロキシ対応
-
 # CORS Settings
 CORS_ALLOW_ALL_ORIGINS = DEBUG
-CORS_ALLOW_CREDENTIALS = True  # Cookie を含むクロスオリジンリクエストを許可
 if not CORS_ALLOW_ALL_ORIGINS:
     CORS_ALLOWED_ORIGINS = [
         origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()
