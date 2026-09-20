@@ -1,10 +1,11 @@
+from . import views
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import ReportViewSet, AttachmentUploadView, AttachmentDownloadView
+from .views import ReportViewSet, AttachmentUploadView, AttachmentDownloadView, GetCSRFTokenView, LoginView, LogoutView, UserView
 
 router = DefaultRouter()
 router.register(r'reports', ReportViewSet, basename='report')
@@ -20,4 +21,8 @@ urlpatterns = [
     # Attachment APIs
     path('attachments/', AttachmentUploadView.as_view(), name='attachment-upload'),
     path('attachments/<int:pk>/download/', AttachmentDownloadView.as_view(), name='attachment-download'),
+    path('get-csrf/', GetCSRFTokenView.as_view(), name='get_csrf'),
+    path('login/', LoginView.as_view(), name='login'),
+    path('logout/', LogoutView.as_view(), name='logout'),
+    path('user/', UserView.as_view(), name='user'),
 ]

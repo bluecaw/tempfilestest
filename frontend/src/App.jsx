@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+import api from './api';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('jwt_token') || '');
@@ -20,13 +18,12 @@ export default function App() {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [selectedReport, setSelectedReport] = useState(null);
 
   // JWT ログイン処理
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post(`${API_BASE}/auth/token/`, { username, password });
+      const res = await api.post('/auth/token/', { username, password });
       setToken(res.data.access);
       localStorage.setItem('jwt_token', res.data.access);
       setMessage({ type: 'success', text: 'ログインしました。' });
@@ -43,19 +40,16 @@ export default function App() {
     setMessage({ type: 'info', text: 'ログアウトしました。' });
   };
 
-  // 報告一覧の取得
+  // 報告一覧の取得（簡略化後）
   const fetchReports = async () => {
     if (!token) return;
     try {
-      const res = await axios.get(`${API_BASE}/reports/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get('/reports/');
       setReports(res.data);
     } catch (err) {
-      // 401 または token_not_valid の場合はログアウト扱いにすル
-      if (err.response?.status === 401 || err.response?.data?.code === 'token_not_valid') {
-        handleLogout();
-      }
+      // 401エラーは api.js のレスポンスインターセプターで自動処理されるため、
+      // ここではその他のエラーログ出力等のみを行います
+      console.error('報告一覧の取得に失敗しました:', err);
     }
   };
 
@@ -82,9 +76,7 @@ export default function App() {
 
     try {
       // 1. Report 作成
-      const reportRes = await axios.post(`${API_BASE}/reports/`, formData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const reportRes = await api.post('/reports/', formData);
       const reportId = reportRes.data.id;
 
       // 2. 各添付ファイルのアップロード
@@ -93,9 +85,8 @@ export default function App() {
         uploadData.append('report_id', reportId);
         uploadData.append('file', file);
 
-        await axios.post(`${API_BASE}/attachments/`, uploadData, {
+        await api.post('/attachments/', uploadData, {
           headers: {
-            Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
           }
         });
@@ -122,9 +113,7 @@ export default function App() {
   // 添付ファイルダウンロード処理
   const handleDownloadAttachment = async (attId) => {
     try {
-      const res = await axios.get(`${API_BASE}/attachments/${attId}/download/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get(`/attachments/${attId}/download/`);
       if (res.data.is_mock) {
         alert(`モック環境: ${res.data.message}\nKey: ${res.data.r2_key}`);
         return;
@@ -178,7 +167,7 @@ export default function App() {
 
   return (
     <div className="app-layout">
-      {/* 側頭ヘッダー */}
+      {/* ヘッダー */}
       <header className="main-header glass-header">
         <div className="header-left">
           <span className="logo-badge">R2</span>

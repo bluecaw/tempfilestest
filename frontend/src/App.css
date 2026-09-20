@@ -369,7 +369,8 @@ body {
   gap: 0.5rem;
 }
 
-.tag-no, .tag-rec {
+.tag-no,
+.tag-rec {
   font-size: 0.75rem;
   padding: 0.15rem 0.5rem;
   border-radius: 4px;

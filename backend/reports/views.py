@@ -1,13 +1,19 @@
 import uuid
+import json  # ★ 追加
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny  # ★ AllowAny を追加
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponseRedirect, JsonResponse
+from django.contrib.auth import authenticate, login, logout  # ★ 追加
+from django.views.decorators.csrf import ensure_csrf_cookie  # ★ 追加
+from django.utils.decorators import method_decorator  # ★ 追加
+
 from .models import Report, Attachment, OperationLog
 from .serializers import ReportSerializer, AttachmentSerializer, AttachmentUploadSerializer
 from .s3_utils import R2Service
+
 
 def log_operation(user, action, target_model, target_id, details="", request=None):
     ip = None
@@ -25,6 +31,7 @@ def log_operation(user, action, target_model, target_id, details="", request=Non
         details=details,
         ip_address=ip
     )
+
 
 class ReportViewSet(viewsets.ModelViewSet):
     queryset = Report.objects.all().prefetch_related('attachments', 'created_by')
@@ -104,4 +111,60 @@ class AttachmentDownloadView(APIView):
         return Response({
             'download_url': download_url,
             'filename': attachment.original_filename
+        })
+
+
+# ==========================================
+# ★ ここから下を追加（認証関連のビュー）
+# ==========================================
+
+class GetCSRFTokenView(APIView):
+    """起動時に呼び出し、CSRFクッキーを付与するビュー"""
+    permission_classes = [AllowAny]
+
+    @method_decorator(ensure_csrf_cookie)
+    def get(self, request):
+        return Response({'message': 'CSRF cookie set'})
+
+
+class LoginView(APIView):
+    """ログイン認証ビュー"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        user = authenticate(request, username=username, password=password)
+
+        if user is not None:
+            login(request, user)  # セッション・クッキーを発行
+            log_operation(user, 'LOGIN', 'User', user.id, f"ログイン成功: {user.username}", request)
+            return Response({
+                'message': 'Login successful',
+                'username': user.username
+            })
+        else:
+            return Response({'error': 'ユーザー名またはパスワードが違います'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LogoutView(APIView):
+    """ログアウトビュー"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        log_operation(user, 'LOGOUT', 'User', user.id, f"ログアウト: {user.username}", request)
+        logout(request)
+        return Response({'message': 'Logout successful'})
+
+
+class UserView(APIView):
+    """ユーザー情報取得ビュー（セッションチェック）"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({
+            'username': request.user.username,
+            'email': request.user.email,
         })
