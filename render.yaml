@@ -4,7 +4,7 @@ services:
     name: report-django-backend
     plan: free
     env: python
-    buildCommand: bash build.sh
+    buildCommand: cd backend && bash build.sh
     startCommand: cd backend && gunicorn config.wsgi:application
     envVars:
       - key: PYTHON_VERSION
