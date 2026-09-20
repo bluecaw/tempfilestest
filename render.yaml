@@ -4,10 +4,8 @@ services:
     name: report-django-backend
     plan: free
     env: python
-    buildCommand: bash build.sh
-    startCommand: |
-      cd backend
-      gunicorn config.wsgi:application
+    buildCommand: cd backend && bash build.sh
+    startCommand: cd backend && gunicorn config.wsgi:application
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -31,11 +29,12 @@ services:
         sync: false
 
   # Frontend Static Site (Vite React)
-  - type: static
+  - type: web
     name: report-react-frontend
     plan: free
+    env: static
     buildCommand: cd frontend && npm install && npm run build
-    publishPath: frontend/dist
+    staticPublishPath: frontend/dist
     envVars:
       - key: VITE_API_URL
         value: https://report-django-backend.onrender.com/api
