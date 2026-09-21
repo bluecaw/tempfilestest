@@ -30,22 +30,21 @@ class Report(models.Model):
         return f"[{self.report_no}] {self.title}"
 
     def save(self, *args, **kwargs):
-        # 0. ログ出力：save() が呼び出されたこと、および受け取った住所を確認
         address_str = (self.address or "").strip()
         print(f"=== Report.save() Called | address: '{address_str}' | lat: {self.latitude} | lng: {self.longitude} ===")
 
-        # 1. 既存更新時の比較：DBから直接最新の旧データを取得
+        # 1. 既存更新時の比較
         if self.pk:
             try:
                 orig = Report.objects.get(pk=self.pk)
+                # 住所が変更された場合、座標をリセットして再取得させる
                 if orig.address != self.address:
-                    # 住所が変更された場合は座標をクリア
                     self.latitude = None
                     self.longitude = None
             except Report.DoesNotExist:
                 pass
 
-        # 2. 住所に入力があり、かつ座標が未設定（None または空）の場合に Geocoding 実行
+        # 2. 住所があり、かつ座標が未設定（None）なら Geocoding 実行
         if address_str and (self.latitude is None or self.longitude is None):
             api_key = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
             

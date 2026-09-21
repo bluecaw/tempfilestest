@@ -6,6 +6,9 @@ class ReportAdmin(admin.ModelAdmin):
     list_display = ('id', 'report_no', 'reception_no', 'date', 'title', 'created_by', 'created_at')
     search_fields = ('report_no', 'reception_no', 'title', 'address')
     list_filter = ('date', 'created_at')
+    
+    # 緯度・経度および日時フィールドを読み取り専用に設定
+    readonly_fields = ('latitude', 'longitude', 'created_at', 'updated_at')
 
 @admin.register(Attachment)
 class AttachmentAdmin(admin.ModelAdmin):
