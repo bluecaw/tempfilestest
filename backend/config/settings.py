@@ -4,6 +4,12 @@ from datetime import timedelta
 import dj_database_url
 from dotenv import load_dotenv
 
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env file if present
+load_dotenv(os.path.join(BASE_DIR.parent, '.env'))
+
 # 1. カスタム CSP ミドルウェアの定義（settings.py の上部または中ほどに記述）
 class SecurityHeadersMiddleware:
     def __init__(self, get_response):
@@ -15,11 +21,6 @@ class SecurityHeadersMiddleware:
         response['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none';"
         return response
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Load environment variables from .env file if present
-load_dotenv(os.path.join(BASE_DIR.parent, '.env'))
 
 # 1. SECRET_KEY は環境変数から取得（未設定時のデフォルト値を解除するか、本番では環境変数を強制）
 SECRET_KEY = os.environ.get('SECRET_KEY')
