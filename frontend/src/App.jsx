@@ -40,15 +40,13 @@ export default function App() {
     setMessage({ type: 'info', text: 'ログアウトしました。' });
   };
 
-  // 報告一覧の取得（簡略化後）
+  // 報告一覧の取得
   const fetchReports = async () => {
     if (!token) return;
     try {
       const res = await api.get('/reports/');
       setReports(res.data);
     } catch (err) {
-      // 401エラーは api.js のレスポンスインターセプターで自動処理されるため、
-      // ここではその他のエラーログ出力等のみを行います
       console.error('報告一覧の取得に失敗しました:', err);
     }
   };
@@ -131,7 +129,8 @@ export default function App() {
       <div className="login-wrapper">
         <div className="login-card glass-panel">
           <div className="brand-header">
-            <span className="brand-icon">📋</span>
+            {/* ★ 変更箇所: ログイン画面に vite.svg を配置 */}
+            <img src="/vite.svg" className="brand-icon" alt="Vite Logo" style={{ width: '40px', height: '40px' }} />
             <h2>業務報告システム</h2>
             <p>Cloudflare R2 添付ファイル統合プラットフォーム</p>
           </div>
@@ -170,7 +169,8 @@ export default function App() {
       {/* ヘッダー */}
       <header className="main-header glass-header">
         <div className="header-left">
-          <span className="logo-badge">R2</span>
+          {/* ★ 変更箇所: ヘッダーに vite.svg を配置 */}
+          <img src="/vite.svg" alt="Vite Logo" style={{ width: '28px', height: '28px', marginRight: '10px' }} />
           <h1>業務報告管理システム</h1>
         </div>
         <div className="header-right">
