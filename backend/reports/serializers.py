@@ -35,11 +35,14 @@ class ReportSerializer(serializers.ModelSerializer):
     created_by = UserSimpleSerializer(read_only=True)
     attachments = AttachmentSerializer(many=True, read_only=True)
 
+from rest_framework import serializers
+from .models import Report
+
 class ReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Report
         fields = '__all__'
-        # 緯度・経度はフロントから送られた値で上書きされず、models.py の save() で自動計算させる
+        # created_by はリクエストユーザーから自動セットするため read_only にする
         read_only_fields = ('latitude', 'longitude', 'created_by', 'created_at', 'updated_at')
 
 

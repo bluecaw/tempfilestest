@@ -30,19 +30,23 @@ class Report(models.Model):
         return f"[{self.report_no}] {self.title}"
 
     def save(self, *args, **kwargs):
+        # 0. ログ出力：save() が呼び出されたこと、および受け取った住所を確認
+        address_str = (self.address or "").strip()
+        print(f"=== Report.save() Called | address: '{address_str}' | lat: {self.latitude} | lng: {self.longitude} ===")
+
         # 1. 既存更新時の比較：DBから直接最新の旧データを取得
         if self.pk:
             try:
                 orig = Report.objects.get(pk=self.pk)
                 if orig.address != self.address:
-                    # 住所が変更された場合、座標をクリアして再取得フラグを立てる
+                    # 住所が変更された場合は座標をクリア
                     self.latitude = None
                     self.longitude = None
             except Report.DoesNotExist:
                 pass
 
-        # 2. 座標取得ロジックとログ出力の追加
-        if self.address and (self.latitude is None or self.longitude is None):
+        # 2. 住所に入力があり、かつ座標が未設定（None または空）の場合に Geocoding 実行
+        if address_str and (self.latitude is None or self.longitude is None):
             api_key = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
             
             if not api_key:
@@ -50,7 +54,7 @@ class Report(models.Model):
             else:
                 url = "https://maps.googleapis.com/maps/api/geocode/json"
                 params = {
-                    'address': self.address,
+                    'address': address_str,
                     'key': api_key,
                     'language': 'ja',
                 }
@@ -63,12 +67,13 @@ class Report(models.Model):
                         location = data['results'][0]['geometry']['location']
                         self.latitude = location['lat']
                         self.longitude = location['lng']
-                        print(f"【Geocoding Success】住所: {self.address} -> Lat: {self.latitude}, Lng: {self.longitude}")
+                        print(f"【Geocoding Success】住所: {address_str} -> Lat: {self.latitude}, Lng: {self.longitude}")
                     else:
-                        # ZERO_RESULTS や REQUEST_DENIED などの API エラーを出力
                         print(f"【Geocoding Failed】API Status: {status}, Error: {data.get('error_message')}")
                 except Exception as e:
                     print(f"【Geocoding Exception】: {e}")
+        else:
+            print(f"【Geocoding Skipped】判定不一致 (address_str: '{address_str}', lat: {self.latitude}, lng: {self.longitude})")
 
         super().save(*args, **kwargs)
 
