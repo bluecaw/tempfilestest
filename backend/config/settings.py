@@ -10,11 +10,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env file if present
 load_dotenv(os.path.join(BASE_DIR.parent, '.env'))
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-change-this!')
+# 1. SECRET_KEY は環境変数から取得（未設定時のデフォルト値を解除するか、本番では環境変数を強制）
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-default-key-for-local-dev-only'
+    else:
+        raise ValueError("SECRET_KEY 環境変数が設定されていません。")
 
+# 2. DEBUG モードは環境変数の値によって切り替え（本番では絶対 False）
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+# 3. 許可するホスト名を明示
+ALLOWED_HOSTS = [
+    'report-django-backend.onrender.com',  # RenderのバックエンドURL
+    'localhost',
+    '127.0.0.1',
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
