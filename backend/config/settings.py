@@ -26,6 +26,14 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
+# Mozilla Observatory 用のセキュリティヘッダー設定
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_HSTS_SECONDS = 31536000  # 1年間
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
 # 4. 許可するホスト名を明示
 ALLOWED_HOSTS = [
     'report-django-backend.onrender.com',  # RenderのバックエンドURL
