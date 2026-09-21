@@ -14,7 +14,6 @@ class Report(models.Model):
     date = models.DateField("報告日付", db_index=True)
     title = models.CharField("件名", max_length=200)
     address = models.CharField("住所", max_length=300, blank=True, default="")
-    # 緯度・経度を保持するフィールドを追加
     latitude = models.FloatField("緯度", null=True, blank=True)
     longitude = models.FloatField("経度", null=True, blank=True)
     description = models.TextField("業務内容")
@@ -31,7 +30,15 @@ class Report(models.Model):
         return f"[{self.report_no}] {self.title}"
 
     def save(self, *args, **kwargs):
-        # 住所が入力されており、かつ緯度または経度が未設定（または更新時）の場合に座標を取得
+        # 既存データ更新時：DB上の変更前の住所と比較
+        if self.pk:
+            old_instance = Report.objects.filter(pk=self.pk).first()
+            # 住所が変更された場合は、緯度経度を一旦クリアして再取得させる
+            if old_instance and old_instance.address != self.address:
+                self.latitude = None
+                self.longitude = None
+
+        # 住所が入力されており、かつ緯度または経度が未設定（または上記でクリアされた場合）に座標を取得
         if self.address and (self.latitude is None or self.longitude is None):
             api_key = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
             if api_key:
@@ -49,7 +56,6 @@ class Report(models.Model):
                         self.latitude = location['lat']
                         self.longitude = location['lng']
                 except Exception as e:
-                    # API通信失敗時やタイムアウト時も保存処理自体は止めないようログ出力のみ行う
                     print(f"Geocoding API Error: {e}")
 
         super().save(*args, **kwargs)
