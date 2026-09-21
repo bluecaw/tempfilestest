@@ -67,7 +67,7 @@ export default function App() {
     setFiles(Array.from(e.target.files));
   };
 
-  // 業務報告登録 または 更新 ＆ ファイル一括アップロード
+  // 業務報告登録 ＆ ファイル一括アップロード
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!token) return;
@@ -75,19 +75,21 @@ export default function App() {
     setMessage({ type: '', text: '' });
 
     try {
-      let reportId;
+      // 1. latitude / longitude が formData に含まれている場合は除外してリクエストを作成
+      const payload = {
+        report_no: formData.report_no,
+        reception_no: formData.reception_no,
+        date: formData.date,
+        title: formData.title,
+        address: formData.address,
+        description: formData.description,
+      };
 
-      if (editingId) {
-        // ■ 既存データの更新 (PATCH)
-        const reportRes = await api.patch(`/reports/${editingId}/`, formData);
-        reportId = reportRes.data.id;
-      } else {
-        // ■ 新規データの作成 (POST)
-        const reportRes = await api.post('/reports/', formData);
-        reportId = reportRes.data.id;
-      }
+      // 1. Report 作成 (POST)
+      const reportRes = await api.post('/reports/', payload);
+      const reportId = reportRes.data.id;
 
-      // 各添付ファイルのアップロード処理
+      // 2. 各添付ファイルのアップロード
       for (const file of files) {
         const uploadData = new FormData();
         uploadData.append('report_id', reportId);
@@ -100,12 +102,7 @@ export default function App() {
         });
       }
 
-      setMessage({
-        type: 'success',
-        text: editingId ? '業務報告の更新が完了しました。' : '業務報告と添付ファイルの登録が完了しました。'
-      });
-
-      // フォームのリセット処理
+      setMessage({ type: 'success', text: '業務報告と添付ファイルの登録が完了しました。' });
       setFormData({
         report_no: '',
         reception_no: '',
@@ -115,13 +112,9 @@ export default function App() {
         description: ''
       });
       setFiles([]);
-      setEditingId(null); // 編集モード解除
       fetchReports();
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: 'エラーが発生しました: ' + (err.response?.data?.detail || JSON.stringify(err.response?.data) || err.message)
-      });
+      setMessage({ type: 'error', text: '登録中にエラーが発生しました: ' + (err.response?.data?.detail || JSON.stringify(err.response?.data) || err.message) });
     } finally {
       setLoading(false);
     }
