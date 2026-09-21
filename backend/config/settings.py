@@ -10,15 +10,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env file if present
 load_dotenv(os.path.join(BASE_DIR.parent, '.env'))
 
-# カスタム CSP ミドルウェアの定義
+# 変更後:
 class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         response = self.get_response(request)
-        # APIバックエンド用に厳格な CSP ヘッダーを付与
-        response['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none';"
+        # 管理画面 (/admin/) の場合は CSS や JS、画像の読み込みを許可する
+        if request.path.startswith('/admin/'):
+            response['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "img-src 'self' data:; "
+                "font-src 'self' data:;"
+            )
+        else:
+            # API 用の厳格な CSP ヘッダー
+            response['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none';"
         return response
 
 
@@ -133,6 +143,16 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# ↓ 以下の WhiteNoise 用ストレージ設定を追加します
+STORAGES = {
+    "default": {
+        "ENGINE": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "ENGINE": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
