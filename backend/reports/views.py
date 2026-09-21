@@ -8,10 +8,12 @@ from rest_framework.throttling import AnonRateThrottle  # ★ スロットルを
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponseRedirect, JsonResponse
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User  # ★ 追加
+from django.core.mail import send_mail  # ★ 追加
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 
-from .models import Report, Attachment, OperationLog
+from .models import Report, Attachment, OperationLog, PasswordResetOTP
 from .serializers import ReportSerializer, AttachmentSerializer, AttachmentUploadSerializer
 from .s3_utils import R2Service
 
@@ -178,3 +180,71 @@ class UserView(APIView):
             'username': request.user.username,
             'email': request.user.email,
         })
+
+# --------------------------------------------------
+# パスワードリセット専用レートリミット（1分間に3回まで）
+# --------------------------------------------------
+class PasswordResetAnonRateThrottle(AnonRateThrottle):
+    rate = '3/minute'
+
+
+class RequestPasswordResetOTPView(APIView):
+    """パスワードリセット用OTP（6桁コード）発行・メール送信API"""
+    permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetAnonRateThrottle]  # 連打防止
+
+    def post(self, request):
+        email = request.data.get('email', '').strip()
+        if not email:
+            return Response({'detail': 'メールアドレスを入力してください。'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email=email, is_active=True).first()
+        if user:
+            otp = PasswordResetOTP.generate_otp(user)
+
+            try:
+                send_mail(
+                    subject='【認証コード】パスワード再設定手続き',
+                    message=f'{user.username} 様\n\nパスワード再設定用の認証コードは [{otp}] です。\n有効期限は10分間です。',
+                    from_email=None,
+                    recipient_list=[user.email],
+                    fail_silently=False,
+                )
+                log_operation(user, 'OTP_REQUEST', 'User', user.id, f"OTP送信成功: {user.email}", request)
+            except Exception as e:
+                print(f"Mail Send Error: {e}")
+
+        # メール列挙攻撃防止のため、ユーザー存在有無に関わらず同じメッセージを返す
+        return Response({'detail': '入力されたメールアドレス宛に認証コードを送信しました。'})
+
+
+class ConfirmPasswordResetOTPView(APIView):
+    """OTP検証＆パスワード変更API"""
+    permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetAnonRateThrottle]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip()
+        otp = request.data.get('otp', '').strip()
+        new_password = request.data.get('new_password', '').strip()
+
+        if not all([email, otp, new_password]):
+            return Response({'detail': 'すべての項目を入力してください。'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email=email, is_active=True).first()
+        if not user:
+            return Response({'detail': '認証コードが無効または期限切れです。'}, status=status.HTTP_400_BAD_REQUEST)
+
+        reset_obj = PasswordResetOTP.objects.filter(user=user, is_used=False).order_by('-created_at').first()
+
+        if reset_obj and reset_obj.is_valid(otp):
+            user.set_password(new_password)
+            user.save()
+
+            reset_obj.is_used = True
+            reset_obj.save()
+
+            log_operation(user, 'PASSWORD_RESET', 'User', user.id, f"パスワード再設定完了: {user.username}", request)
+            return Response({'detail': 'パスワードの再設定が完了しました。'})
+        else:
+            return Response({'detail': '認証コードが無効、誤っているか、有効期限が切れています。'}, status=status.HTTP_400_BAD_REQUEST)

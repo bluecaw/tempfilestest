@@ -1,5 +1,9 @@
+import secrets
+import hashlib
+from datetime import timedelta
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 class Report(models.Model):
     report_no = models.CharField("件名番号", max_length=50, db_index=True)
@@ -58,3 +62,48 @@ class OperationLog(models.Model):
         verbose_name = "操作ログ"
         verbose_name_plural = "操作ログ一覧"
         ordering = ['-created_at']
+
+class PasswordResetOTP(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_otps')
+    otp_hash = models.CharField(max_length=64)  # 6桁コードのハッシュ値（生コードは保存しない）
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
+    attempts = models.IntegerField(default=0)  # 試行失敗回数
+
+    @classmethod
+    def generate_otp(cls, user):
+        # 6桁のランダム数字を生成（例: "048291"）
+        raw_otp = f"{secrets.randbelow(1000000):06d}"
+        otp_hash = hashlib.sha256(raw_otp.encode()).hexdigest()
+        
+        # 該当ユーザーの過去の未使用コードをすべて無効化
+        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+        
+        # 新しいOTPレコードを保存
+        cls.objects.create(user=user, otp_hash=otp_hash)
+        
+        # メール送信用に平文の6桁コードを返す
+        return raw_otp
+
+    def is_valid(self, raw_otp):
+        if self.is_used:
+            return False
+            
+        # 有効期限: 10分
+        if timezone.now() > self.created_at + timedelta(minutes=10):
+            return False
+            
+        # 試行回数上限: 3回失敗したら無効化
+        if self.attempts >= 3:
+            self.is_used = True
+            self.save()
+            return False
+
+        # ハッシュ値を検証
+        input_hash = hashlib.sha256(raw_otp.encode()).hexdigest()
+        if secrets.compare_digest(self.otp_hash, input_hash):
+            return True
+        else:
+            self.attempts += 1
+            self.save()
+            return False

@@ -198,3 +198,16 @@ R2_ACCOUNT_ID = os.environ.get('R2_ACCOUNT_ID', '')
 R2_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID', '')
 R2_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY', '')
 R2_BUCKET = os.environ.get('R2_BUCKET', 'business-report-files')
+
+# --------------------------------------------------
+# メール送信設定
+# --------------------------------------------------
+
+# ローカル開発用：コンソールにメール本文を出力する（実際のメール送信は行わない）
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'sandbox.smtp.mailtrap.io')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 2525))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@example.com')

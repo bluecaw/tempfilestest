@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import api from './api';
+import PasswordReset from './PasswordReset'; // ★ 1. インポートを追加
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('jwt_token') || '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [isResetMode, setIsResetMode] = useState(false); // ★ 2. 状態（state）を追加
 
   const [reports, setReports] = useState([]);
   const [formData, setFormData] = useState({
@@ -124,12 +126,17 @@ export default function App() {
     }
   };
 
+  // 未ログイン状態の画面表示制御
   if (!token) {
+    // パスワード再設定画面への切替
+    if (isResetMode) {
+      return <PasswordReset onBackToLogin={() => setIsResetMode(false)} />;
+    }
+
     return (
       <div className="login-wrapper">
         <div className="login-card glass-panel">
           <div className="brand-header">
-            {/* ★ 変更箇所: ログイン画面に vite.svg を配置 */}
             <img src="/vite.svg" className="brand-icon" alt="Vite Logo" style={{ width: '40px', height: '40px' }} />
             <h2>業務報告システム</h2>
             <p>Cloudflare R2 添付ファイル統合プラットフォーム</p>
@@ -157,6 +164,24 @@ export default function App() {
               />
             </div>
             <button type="submit" className="btn-glow">ログイン</button>
+
+            {/* パスワード再設定画面への切り替えボタン */}
+            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setIsResetMode(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#60a5fa',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  textDecoration: 'underline'
+                }}
+              >
+                パスワードをお忘れの方はこちら
+              </button>
+            </div>
           </form>
           {message.text && <div className={`banner ${message.type}`}>{message.text}</div>}
         </div>
@@ -164,12 +189,12 @@ export default function App() {
     );
   }
 
+  // ログイン後のメイン画面
   return (
     <div className="app-layout">
       {/* ヘッダー */}
       <header className="main-header glass-header">
         <div className="header-left">
-          {/* ★ 変更箇所: ヘッダーに vite.svg を配置 */}
           <img src="/vite.svg" alt="Vite Logo" style={{ width: '28px', height: '28px', marginRight: '10px' }} />
           <h1>業務報告管理システム</h1>
         </div>

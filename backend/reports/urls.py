@@ -5,7 +5,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import ReportViewSet, AttachmentUploadView, AttachmentDownloadView, GetCSRFTokenView, LoginView, LogoutView, UserView
+from .views import ReportViewSet, AttachmentUploadView, AttachmentDownloadView, GetCSRFTokenView, LoginView, LogoutView, UserView, RequestPasswordResetOTPView, ConfirmPasswordResetOTPView
 
 router = DefaultRouter()
 router.register(r'reports', ReportViewSet, basename='report')
@@ -25,4 +25,7 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('user/', UserView.as_view(), name='user'),
+    # ★ パスワードリセット用 API
+    path('auth/password-reset/request/', RequestPasswordResetOTPView.as_view(), name='password_reset_request'),
+    path('auth/password-reset/confirm/', ConfirmPasswordResetOTPView.as_view(), name='password_reset_confirm'),
 ]
