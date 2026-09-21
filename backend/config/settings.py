@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env file if present
 load_dotenv(os.path.join(BASE_DIR.parent, '.env'))
 
-# 1. カスタム CSP ミドルウェアの定義（settings.py の上部または中ほどに記述）
+# カスタム CSP ミドルウェアの定義
 class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -22,7 +22,10 @@ class SecurityHeadersMiddleware:
         return response
 
 
-# 1. SECRET_KEY は環境変数から取得（未設定時のデフォルト値を解除するか、本番では環境変数を強制）
+# 1. DEBUG モードの判定（SECRET_KEY より前に定義）
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
+
+# 2. SECRET_KEY は環境変数から取得
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
     if DEBUG:
@@ -30,15 +33,12 @@ if not SECRET_KEY:
     else:
         raise ValueError("SECRET_KEY 環境変数が設定されていません。")
 
-# 2. DEBUG モードは環境変数の値によって切り替え（本番では絶対 False）
-DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
-
 # 3. 本番環境（DEBUG=False）の時のみ、クッキーの HTTPS 限定化を有効にする
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
-# Mozilla Observatory 用のセキュリティヘッダー設定
+    # Mozilla Observatory 用のセキュリティヘッダー設定
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
@@ -46,7 +46,7 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
-# (APIサーバーとしての動作を妨げない厳格なCSP設定)
+    # (APIサーバーとしての動作を妨げない厳格なCSP設定)
     SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
 # 4. 許可するホスト名を明示
@@ -75,7 +75,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'settings.SecurityHeadersMiddleware',  # settings.py 内に書いた場合    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'config.settings.SecurityHeadersMiddleware',  # ← モジュール名を config.settings に修正
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -140,14 +141,13 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
-# --- ここから追加：レートリミットの設定 ---
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',  # 未認証ユーザー対象
-        'rest_framework.throttling.UserRateThrottle',  # ログイン済みユーザー対象
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '10/minute',   # ログイン前の未認証APIは 1分に10回まで
-        'user': '120/minute',  # ログイン後の通常操作は 1分に120回まで
+        'anon': '10/minute',
+        'user': '120/minute',
     }
 }
 
@@ -161,18 +161,16 @@ SIMPLE_JWT = {
 }
 
 # --------------------------------------------------
-# ステップ1: CORS 設定の強化
+# CORS 設定の強化
 # --------------------------------------------------
-CORS_ALLOW_ALL_ORIGINS = False  # 常時Falseにし、明示的にドメインを許可
+CORS_ALLOW_ALL_ORIGINS = False
 
-# デフォルトで許可するオリジン（開発・本番環境）
 _DEFAULT_ALLOWED_ORIGINS = [
     "https://report-react-frontend.onrender.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 
-# 環境変数（CORS_ALLOWED_ORIGINS）から追加のドメインをパースして統合
 _ENV_ALLOWED_ORIGINS = [
     origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()
 ]
@@ -182,17 +180,16 @@ CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 CORS_ALLOW_CREDENTIALS = True
 
 # --------------------------------------------------
-# ステップ1: セキュリティヘッダーの設定
+# セキュリティヘッダーの設定
 # --------------------------------------------------
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
-# 本番環境（DEBUG=False）のみ有効化する保護設定
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_HSTS_SECONDS = 31536000  # 1年間
+    SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
