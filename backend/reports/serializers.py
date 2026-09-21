@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Report, Attachment
+from .s3_utils import R2Service  # ★ 追加
+
 
 class UserSimpleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -22,7 +24,11 @@ class AttachmentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'r2_key', 'uploaded_by', 'uploaded_at', 'download_url']
 
     def get_download_url(self, obj):
-        return f"/api/attachments/{obj.id}/download/"
+        """Cloudflare R2 の 5分間有効な署名付きURLを発行"""
+        if obj.r2_key:
+            r2_service = R2Service()
+            return r2_service.generate_presigned_url(obj.r2_key, expires_in=300)
+        return None
 
 
 class ReportSerializer(serializers.ModelSerializer):
@@ -44,7 +50,7 @@ class AttachmentUploadSerializer(serializers.Serializer):
     file = serializers.FileField(required=True)
 
     ALLOWED_EXTENSIONS = {
-        'jpg', 'jpeg', 'png', 'gif', 'webp',  # 写真
+        'jpg', 'jpeg', 'png', 'gif', 'webp',   # 写真
         'pdf',                                 # PDF
         'xlsx', 'xls', 'csv',                  # Excel
         'docx', 'doc', 'txt', 'zip'            # その他
@@ -52,7 +58,7 @@ class AttachmentUploadSerializer(serializers.Serializer):
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB制限
 
     def validate_file(self, value):
-        ext = value.name.split('.')[-1].lower()
+        ext = value.name.split('.')[-1].lower() if '.' in value.name else ''
         if ext not in self.ALLOWED_EXTENSIONS:
             raise serializers.ValidationError(f"許可されていない拡張子です: .{ext}")
 

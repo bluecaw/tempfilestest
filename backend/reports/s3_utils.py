@@ -1,6 +1,7 @@
 import os
 import boto3
 from botocore.config import Config
+from botocore.exceptions import ClientError  # ★ 追加
 from django.conf import settings
 
 class R2Service:
@@ -39,19 +40,24 @@ class R2Service:
         )
 
     def generate_presigned_url(self, r2_key, expires_in=300):
-        """期限付きダウンロードURL（Pre-signed URL）を発行"""
+        """期限付きダウンロードURL（Pre-signed URL）を発行（デフォルト5分）"""
         if not self.is_configured:
             return f"/mock-download/{r2_key}"
 
-        url = self.s3_client.generate_presigned_url(
-            'get_object',
-            Params={
-                'Bucket': self.bucket_name,
-                'Key': r2_key
-            },
-            ExpiresIn=expires_in
-        )
-        return url
+        # ★ try-except を追加して例外発生時に安全に空文字または None を返すように保護
+        try:
+            url = self.s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': self.bucket_name,
+                    'Key': r2_key
+                },
+                ExpiresIn=expires_in
+            )
+            return url
+        except ClientError as e:
+            print(f"[R2 Presigned URL Error]: {e}")
+            return ""
 
     def delete_file(self, r2_key):
         """R2上のオブジェクトを削除"""
