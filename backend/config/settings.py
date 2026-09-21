@@ -14,14 +14,19 @@ load_dotenv(os.path.join(BASE_DIR.parent, '.env'))
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
     if DEBUG:
-        SECRET_KEY = 'django-insecure-default-key-for-local-dev-only'
+        SECRET_KEY = 'COo-I9kH5ewDEGjI0gQ1ZueYhQ2QK7j93R4Wb7ntEgi42wml1j_fGwTep90jFAqm614'
     else:
         raise ValueError("SECRET_KEY 環境変数が設定されていません。")
 
 # 2. DEBUG モードは環境変数の値によって切り替え（本番では絶対 False）
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
 
-# 3. 許可するホスト名を明示
+# 3. 本番環境（DEBUG=False）の時のみ、クッキーの HTTPS 限定化を有効にする
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+# 4. 許可するホスト名を明示
 ALLOWED_HOSTS = [
     'report-django-backend.onrender.com',  # RenderのバックエンドURL
     'localhost',
