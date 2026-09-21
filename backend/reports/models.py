@@ -30,18 +30,24 @@ class Report(models.Model):
         return f"[{self.report_no}] {self.title}"
 
     def save(self, *args, **kwargs):
-        # 既存データ更新時：DB上の変更前の住所と比較
+        # 1. 既存更新時の比較：DBから直接最新の旧データを取得
         if self.pk:
-            old_instance = Report.objects.filter(pk=self.pk).first()
-            # 住所が変更された場合は、緯度経度を一旦クリアして再取得させる
-            if old_instance and old_instance.address != self.address:
-                self.latitude = None
-                self.longitude = None
+            try:
+                orig = Report.objects.get(pk=self.pk)
+                if orig.address != self.address:
+                    # 住所が変更された場合、座標をクリアして再取得フラグを立てる
+                    self.latitude = None
+                    self.longitude = None
+            except Report.DoesNotExist:
+                pass
 
-        # 住所が入力されており、かつ緯度または経度が未設定（または上記でクリアされた場合）に座標を取得
+        # 2. 座標取得ロジックとログ出力の追加
         if self.address and (self.latitude is None or self.longitude is None):
             api_key = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
-            if api_key:
+            
+            if not api_key:
+                print("【Geocoding Warning】GOOGLE_MAPS_API_KEY が settings に設定されていません。")
+            else:
                 url = "https://maps.googleapis.com/maps/api/geocode/json"
                 params = {
                     'address': self.address,
@@ -51,12 +57,18 @@ class Report(models.Model):
                 try:
                     response = requests.get(url, params=params, timeout=5)
                     data = response.json()
-                    if data.get('status') == 'OK':
+                    status = data.get('status')
+
+                    if status == 'OK':
                         location = data['results'][0]['geometry']['location']
                         self.latitude = location['lat']
                         self.longitude = location['lng']
+                        print(f"【Geocoding Success】住所: {self.address} -> Lat: {self.latitude}, Lng: {self.longitude}")
+                    else:
+                        # ZERO_RESULTS や REQUEST_DENIED などの API エラーを出力
+                        print(f"【Geocoding Failed】API Status: {status}, Error: {data.get('error_message')}")
                 except Exception as e:
-                    print(f"Geocoding API Error: {e}")
+                    print(f"【Geocoding Exception】: {e}")
 
         super().save(*args, **kwargs)
 
