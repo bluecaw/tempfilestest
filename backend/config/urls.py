@@ -23,7 +23,7 @@ def setup_test_user(request):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/setup-test-user/', setup_test_user),  # ← 一時的なセットアップURL
+    path('setup-test-user/', setup_test_user),  # ← 一時的なセットアップURL
     path('api/', include('reports.urls')),
     path('', health_check),
 ]
