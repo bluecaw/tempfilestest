@@ -114,14 +114,41 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# CORS Settings
-CORS_ALLOW_ALL_ORIGINS = DEBUG
-if not CORS_ALLOW_ALL_ORIGINS:
-    CORS_ALLOWED_ORIGINS = [
-        origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()
-    ]
-    # Django 4.x の CSRF 対策として信頼するオリジンを設定
-    CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+# --------------------------------------------------
+# ステップ1: CORS 設定の強化
+# --------------------------------------------------
+CORS_ALLOW_ALL_ORIGINS = False  # 常時Falseにし、明示的にドメインを許可
+
+# デフォルトで許可するオリジン（開発・本番環境）
+_DEFAULT_ALLOWED_ORIGINS = [
+    "https://report-react-frontend.onrender.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+# 環境変数（CORS_ALLOWED_ORIGINS）から追加のドメインをパースして統合
+_ENV_ALLOWED_ORIGINS = [
+    origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()
+]
+
+CORS_ALLOWED_ORIGINS = list(set(_DEFAULT_ALLOWED_ORIGINS + _ENV_ALLOWED_ORIGINS))
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+CORS_ALLOW_CREDENTIALS = True
+
+# --------------------------------------------------
+# ステップ1: セキュリティヘッダーの設定
+# --------------------------------------------------
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+
+# 本番環境（DEBUG=False）のみ有効化する保護設定
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_HSTS_SECONDS = 31536000  # 1年間
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 # Cloudflare R2 Credentials
 R2_ACCOUNT_ID = os.environ.get('R2_ACCOUNT_ID', '')
