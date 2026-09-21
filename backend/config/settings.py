@@ -100,9 +100,15 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
+# --- ここから追加：レートリミットの設定 ---
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',  # 未認証ユーザー対象
+        'rest_framework.throttling.UserRateThrottle',  # ログイン済みユーザー対象
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '10/minute',   # ログイン前の未認証APIは 1分に10回まで
+        'user': '120/minute',  # ログイン後の通常操作は 1分に120回まで
+    }
 }
 
 # JWT Settings

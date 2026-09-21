@@ -1,18 +1,26 @@
 import uuid
-import json  # ★ 追加
+import json
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny  # ★ AllowAny を追加
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.throttling import AnonRateThrottle  # ★ スロットルをインポート
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponseRedirect, JsonResponse
-from django.contrib.auth import authenticate, login, logout  # ★ 追加
-from django.views.decorators.csrf import ensure_csrf_cookie  # ★ 追加
-from django.utils.decorators import method_decorator  # ★ 追加
+from django.contrib.auth import authenticate, login, logout
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 
 from .models import Report, Attachment, OperationLog
 from .serializers import ReportSerializer, AttachmentSerializer, AttachmentUploadSerializer
 from .s3_utils import R2Service
+
+
+# --------------------------------------------------
+# ログイン専用の厳密なレートリミット（1分間に5回まで）
+# --------------------------------------------------
+class LoginAnonRateThrottle(AnonRateThrottle):
+    rate = '5/minute'
 
 
 def log_operation(user, action, target_model, target_id, details="", request=None):
@@ -115,12 +123,13 @@ class AttachmentDownloadView(APIView):
 
 
 # ==========================================
-# ★ ここから下を追加（認証関連のビュー）
+# 認証関連のビュー（セキュリティ強化適用）
 # ==========================================
 
 class GetCSRFTokenView(APIView):
     """起動時に呼び出し、CSRFクッキーを付与するビュー"""
     permission_classes = [AllowAny]
+    throttle_classes = [AnonRateThrottle]  # ★ settings.py の 10/minute が適用される
 
     @method_decorator(ensure_csrf_cookie)
     def get(self, request):
@@ -128,8 +137,9 @@ class GetCSRFTokenView(APIView):
 
 
 class LoginView(APIView):
-    """ログイン認証ビュー"""
+    """ログイン認証ビュー（試行回数を厳格に制限）"""
     permission_classes = [AllowAny]
+    throttle_classes = [LoginAnonRateThrottle]  # ★ 1分間に5回までに制限
 
     def post(self, request):
         username = request.data.get('username')
