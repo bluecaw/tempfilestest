@@ -147,10 +147,10 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # ↓ 以下の WhiteNoise 用ストレージ設定を追加します
 STORAGES = {
     "default": {
-        "ENGINE": "django.core.files.storage.FileSystemStorage",
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "ENGINE": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
 
