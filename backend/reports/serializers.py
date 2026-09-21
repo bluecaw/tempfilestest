@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Report, Attachment, Facility
-from .s3_utils import R2Service  # ★ 追加
+from .models import Report, Attachment
+from .s3_utils import R2Service
 
 
 class UserSimpleSerializer(serializers.ModelSerializer):
@@ -39,8 +39,8 @@ class ReportSerializer(serializers.ModelSerializer):
         model = Report
         fields = [
             'id', 'report_no', 'reception_no', 'date', 'title', 
-            'address', 'description', 'created_by', 'created_at', 
-            'updated_at', 'attachments'
+            'address', 'latitude', 'longitude', 'description', 
+            'created_by', 'created_at', 'updated_at', 'attachments'
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at', 'attachments']
 
@@ -66,8 +66,3 @@ class AttachmentUploadSerializer(serializers.Serializer):
             raise serializers.ValidationError(f"ファイルサイズ制限(50MB)を超過しています: {value.size / (1024*1024):.2f}MB")
 
         return value
-
-class FacilitySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Facility
-        fields = ['id', 'name', 'address', 'latitude', 'longitude']
