@@ -4,6 +4,17 @@ from datetime import timedelta
 import dj_database_url
 from dotenv import load_dotenv
 
+# 1. カスタム CSP ミドルウェアの定義（settings.py の上部または中ほどに記述）
+class SecurityHeadersMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        # APIバックエンド用に厳格な CSP ヘッダーを付与
+        response['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none';"
+        return response
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -34,6 +45,9 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
+# (APIサーバーとしての動作を妨げない厳格なCSP設定)
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
 # 4. 許可するホスト名を明示
 ALLOWED_HOSTS = [
     'report-django-backend.onrender.com',  # RenderのバックエンドURL
@@ -60,7 +74,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'settings.SecurityHeadersMiddleware',  # settings.py 内に書いた場合    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
