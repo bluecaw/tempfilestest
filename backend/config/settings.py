@@ -19,7 +19,6 @@ class SecurityHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
 
-        # 管理画面 (/admin/) 用の CSP
         if request.path.startswith('/admin/'):
             response['Content-Security-Policy'] = (
                 "default-src 'self'; "
@@ -29,11 +28,9 @@ class SecurityHeadersMiddleware:
                 "img-src 'self' data:;"
             )
         else:
-            # 一般画面・API用の CSP
-            # connect-src に '*' を含めることで、ログイン API 通信や WebSocket 認証の遮断を防ぎます
             response['Content-Security-Policy'] = (
-                "default-src 'self'; "
-                "connect-src 'self' http: https: ws: wss: *; "
+                "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; "
+                "connect-src 'self' http: https: ws: wss: report-django-backend.onrender.com; "
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "font-src 'self' data: https://fonts.gstatic.com; "
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "

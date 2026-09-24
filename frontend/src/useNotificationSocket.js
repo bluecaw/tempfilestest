@@ -1,5 +1,5 @@
 // useNotificationSocket.js
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export const useNotificationSocket = (token) => {
     const [notifications, setNotifications] = useState([]);
@@ -7,14 +7,21 @@ export const useNotificationSocket = (token) => {
     const [isConnected, setIsConnected] = useState(false);
     const socketRef = useRef(null);
 
-    const connect = useCallback(() => {
+    useEffect(() => {
         if (!token) return;
 
-        const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        const host = import.meta.env.VITE_WS_URL || 'localhost:8000';
-        const wsUrl = `${wsScheme}://${host}/ws/notifications/?token=${token}`;
+        // ★ 本番ドメインへの WebSocket URL を動的に決定
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
-        const socket = new WebSocket(wsUrl);
+        // 環境変数 VITE_WS_URL があればそれを使用し、無ければ本番のRenderバックエンドURLをフォールバックとして使用
+        const envWsUrl = import.meta.env.VITE_WS_URL;
+        const defaultBackendHost = 'report-django-backend.onrender.com';
+
+        const wsBaseUrl = envWsUrl || `${wsProtocol}//${defaultBackendHost}`;
+        const socketUrl = `${wsBaseUrl}/ws/notifications/?token=${token}`;
+
+        console.log(`Connecting to WebSocket: ${socketUrl}`);
+        const socket = new WebSocket(socketUrl);
         socketRef.current = socket;
 
         socket.onopen = () => {
@@ -25,44 +32,29 @@ export const useNotificationSocket = (token) => {
         socket.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                console.log("WebSocketメッセージ受信成功:", data);
-
                 setLatestNotification(data);
                 setNotifications((prev) => [data, ...prev]);
-            } catch (err) {
-                console.error('Failed to parse WS message:', err);
+            } catch (e) {
+                console.error('WebSocket Message Parse Error:', e);
             }
         };
 
         socket.onerror = (error) => {
             console.error('WebSocket Error:', error);
+            setIsConnected(false);
         };
 
-        socket.onclose = (event) => {
-            console.log('WebSocket Closed:', event.reason);
+        socket.onclose = () => {
+            console.log('WebSocket Disconnected');
             setIsConnected(false);
+        };
 
-            if (!event.wasClean) {
-                setTimeout(() => {
-                    connect();
-                }, 3000);
+        return () => {
+            if (socket.readyState === 1) {
+                socket.close();
             }
         };
     }, [token]);
 
-    useEffect(() => {
-        connect();
-
-        return () => {
-            if (socketRef.current) {
-                socketRef.current.close();
-            }
-        };
-    }, [connect]);
-
-    return {
-        notifications,
-        latestNotification,
-        isConnected,
-    };
+    return { notifications, latestNotification, isConnected };
 };
