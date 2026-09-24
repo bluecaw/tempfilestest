@@ -102,26 +102,34 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'config.urls'
 
 # --------------------------------------------------
-# ASGI / Channel Layer 設定 (★ 追加)
+# ASGI / Channel Layer 設定
 # --------------------------------------------------
 ASGI_APPLICATION = 'config.asgi.application'
 
-# settings.py の末尾付近（REDIS_URL の処理部分）を以下に置き換え
-
+# 環境変数から REDIS_URL を取得 (Render / Upstash 用)
 REDIS_URL = os.environ.get('REDIS_URL')
 
 if REDIS_URL:
-    # ssl_cert_reqs のエラーを回避し、Render / Upstash (rediss://) に安全に接続する設定
+    url = urlparse(REDIS_URL)
+    
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
-                "hosts": [REDIS_URL],
+                "hosts": [{
+                    "address": REDIS_URL,
+                    # Upstash等の TLS接続 (rediss://) 用の設定
+                    "ssl_cert_reqs": None if url.scheme == 'rediss' else 'required',
+                }],
+                # ★ タイムアウト・切断防止の設定を追加
+                "capacity": 1500,
+                "expiry": 10,
+                "health_check_interval": 15,  # 15秒ごとにヘルスチェックを行って接続を維持
             },
         },
     }
 else:
-    # REDIS_URL 環境変数がない場合（ローカルテスト等）はメモリ層を使用
+    # REDIS_URL 環境変数がない場合（ローカルテスト等）
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels.layers.InMemoryChannelLayer",
@@ -130,7 +138,7 @@ else:
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'BACKEND': 'django.template.backends.DjangoTemplates',
         'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -261,36 +269,3 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@example.com'
 
 # Google Maps API Key
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
-
-# 環境変数から REDIS_URL を取得 (Render / Upstash 用)
-REDIS_URL = os.environ.get('REDIS_URL')
-
-if REDIS_URL:
-    url = urlparse(REDIS_URL)
-    
-    CHANNEL_LAYERS = {
-        "default": {
-            "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {
-                "hosts": [{
-                    "address": REDIS_URL,
-                    # Upstash等の TLS接続 (rediss://) の場合に必要な暗号化オプション
-                    "ssl_cert_reqs": None if url.scheme == 'rediss' else 'required',
-                }],
-            },
-        },
-    }
-else:
-    CHANNEL_LAYERS = {
-        "default": {
-            "BACKEND": "channels.layers.InMemoryChannelLayer",
-        },
-    }
-
-# SecurityHeadersMiddleware を削除し、Django標準の安全な CSP またはヘッダーを直接適用
-# settings.py の末尾に追加してください
-
-# Connect-src に wss: を許可
-CSP_CONNECT_SRC = ("'self'", "https:", "wss:", "ws:", "report-django-backend.onrender.com")
-
-# もし django-csp パッケージ等を使っていない場合は、最上部の MIDDLEWARE 設定を確認します

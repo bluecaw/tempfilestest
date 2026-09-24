@@ -1,4 +1,4 @@
-// useNotificationSocket.js
+// frontend/src/useNotificationSocket.js
 import { useState, useEffect, useRef } from 'react';
 
 export const useNotificationSocket = (token) => {
@@ -6,14 +6,13 @@ export const useNotificationSocket = (token) => {
     const [latestNotification, setLatestNotification] = useState(null);
     const [isConnected, setIsConnected] = useState(false);
     const socketRef = useRef(null);
+    const pingIntervalRef = useRef(null); // ★ Ping用のタイマー保持
 
     useEffect(() => {
         if (!token) return;
 
-        // ★ 本番ドメインへの WebSocket URL を動的に決定
+        // WebSocket URL を動的に決定
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-
-        // 環境変数 VITE_WS_URL があればそれを使用し、無ければ本番のRenderバックエンドURLをフォールバックとして使用
         const envWsUrl = import.meta.env.VITE_WS_URL;
         const defaultBackendHost = 'report-django-backend.onrender.com';
 
@@ -27,11 +26,22 @@ export const useNotificationSocket = (token) => {
         socket.onopen = () => {
             console.log('WebSocket Connected');
             setIsConnected(true);
+
+            // ★ 25秒ごとに Ping メッセージを送信して接続を維持 (Upstash/Renderのタイムアウト防止)
+            pingIntervalRef.current = setInterval(() => {
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ type: 'ping' }));
+                }
+            }, 25000);
         };
 
         socket.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+
+                // ★ サーバーからの Pong 返答は通知リストに追加せずスキップ
+                if (data.type === 'pong') return;
+
                 setLatestNotification(data);
                 setNotifications((prev) => [data, ...prev]);
             } catch (e) {
@@ -47,10 +57,19 @@ export const useNotificationSocket = (token) => {
         socket.onclose = () => {
             console.log('WebSocket Disconnected');
             setIsConnected(false);
+
+            // ★ 切断時に Ping タイマーを解除
+            if (pingIntervalRef.current) {
+                clearInterval(pingIntervalRef.current);
+            }
         };
 
         return () => {
-            if (socket.readyState === 1) {
+            // ★ コンポーネントアンマウント時のクリーンアップ
+            if (pingIntervalRef.current) {
+                clearInterval(pingIntervalRef.current);
+            }
+            if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
                 socket.close();
             }
         };
