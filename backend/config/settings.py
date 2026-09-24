@@ -18,14 +18,15 @@ class SecurityHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
 
-        # connect-src に wss: および ws: を強制的にセット
+        # 広範な http: / https: ワイルドカードと script-src の 'unsafe-inline' 等を除去
         csp_policy = (
-            "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; "
-            "connect-src 'self' http: https: ws: wss: report-django-backend.onrender.com wss://report-django-backend.onrender.com; "
+            "default-src 'self'; "
+            "connect-src 'self' https://report-django-backend.onrender.com wss://report-django-backend.onrender.com https://report-react-frontend.onrender.com ws: wss:; "
+            "script-src 'self'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' data: https://fonts.gstatic.com; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
             "img-src 'self' data: https: blob:; "
+            "object-src 'none'; "
             "frame-ancestors 'none';"
         )
 
