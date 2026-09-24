@@ -7,8 +7,40 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.conf import settings
 
+# ==========================================
+# 1. ユーザー拡張モデル (新規追加)
+# ==========================================
+class UserProfile(models.Model):
+    class Role(models.TextChoices):
+        MEMBER = 'MEMBER', '一般社員'
+        MANAGER = 'MANAGER', '上司'
+        ADMIN = 'ADMIN', '管理者'
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name="ユーザー")
+    role = models.CharField("役割", max_length=10, choices=Role.choices, default=Role.MEMBER)
+    supervisor = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='subordinates',
+        verbose_name="直属の上司"
+    )
+
+    class Meta:
+        verbose_name = "ユーザープロフィール"
+        verbose_name_plural = "ユーザープロフィール一覧"
+
+    def __str__(self):
+        supervisor_name = self.supervisor.username if self.supervisor else "なし"
+        return f"{self.user.username} [{self.get_role_display()}] (上司: {supervisor_name})"
 
 class Report(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = 'Draft', '下書き'
+        PENDING = 'Pending', '承認待ち'
+        APPROVED = 'Approved', '承認済み'
+        REJECTED = 'Rejected', '差戻し'
     report_no = models.CharField("件名番号", max_length=50, db_index=True)
     reception_no = models.CharField("受付番号", max_length=50, db_index=True)
     date = models.DateField("報告日付", db_index=True)
@@ -18,6 +50,14 @@ class Report(models.Model):
     longitude = models.FloatField("経度", null=True, blank=True)
     description = models.TextField("業務内容")
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="reports", verbose_name="作成者")
+    # ★ 追加: 承認ステータス（デフォルトは「承認待ち」）
+    status = models.CharField(
+        "承認状況", 
+        max_length=20, 
+        choices=Status.choices, 
+        default=Status.PENDING,
+        db_index=True
+    )
     created_at = models.DateTimeField("作成日時", auto_now_add=True)
     updated_at = models.DateTimeField("更新日時", auto_now=True)
 

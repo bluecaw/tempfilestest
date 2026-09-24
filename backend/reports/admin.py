@@ -1,6 +1,25 @@
 from django.contrib import admin
-from .models import Report, Attachment, OperationLog
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.models import User
+from .models import Report, Attachment, OperationLog, PasswordResetOTP, UserProfile
 
+# ==========================================
+# 1. ユーザー管理（UserProfileをインライン追加）
+# ==========================================
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    fk_name = "user"
+    can_delete = False
+    verbose_name_plural = 'プロフィール情報（役割・上司）'
+
+
+class UserAdmin(BaseUserAdmin):
+    inlines = (UserProfileInline,)
+
+
+# 標準のUser管理画面をアン登録して再登録
+admin.site.unregister(User)
+admin.site.register(User, UserAdmin)
 @admin.register(Report)
 class ReportAdmin(admin.ModelAdmin):
     list_display = ('id', 'report_no', 'reception_no', 'date', 'title', 'created_by', 'created_at')

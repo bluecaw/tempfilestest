@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from datetime import timedelta
+from urllib.parse import urlparse  # ★ 追加
 import dj_database_url
 from dotenv import load_dotenv
 
@@ -10,7 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env file if present
 load_dotenv(os.path.join(BASE_DIR.parent, '.env'))
 
-# 変更後:
+# Security Middleware Class
 class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -55,8 +56,6 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000  # 1年間
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-
-    # (APIサーバーとしての動作を妨げない厳格なCSP設定)
     SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
 # 4. 許可するホスト名を明示
@@ -66,7 +65,11 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
 ]
 
+# --------------------------------------------------
+# INSTALLED_APPS (Daphne & Channels を追加)
+# --------------------------------------------------
 INSTALLED_APPS = [
+    'daphne',  # django-channels v4以降、ASGI起動サポートに必要（最上部指定）
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -78,6 +81,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'channels',  # ★ 追加
     
     # Local apps
     'reports.apps.ReportsConfig',
@@ -85,7 +89,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'config.settings.SecurityHeadersMiddleware',  # ← モジュール名を config.settings に修正
+    'config.settings.SecurityHeadersMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -97,6 +101,22 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'config.urls'
+
+# --------------------------------------------------
+# ASGI / Channel Layer 設定 (★ 追加)
+# --------------------------------------------------
+ASGI_APPLICATION = 'config.asgi.application'
+
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [REDIS_URL],
+        },
+    },
+}
 
 TEMPLATES = [
     {
@@ -144,7 +164,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# ↓ 以下の WhiteNoise 用ストレージ設定を追加します
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -222,8 +241,6 @@ R2_BUCKET = os.environ.get('R2_BUCKET', 'business-report-files')
 # --------------------------------------------------
 # メール送信設定
 # --------------------------------------------------
-
-# ローカル開発用：コンソールにメール本文を出力する（実際のメール送信は行わない）
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'sandbox.smtp.mailtrap.io')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 2525))
@@ -232,5 +249,30 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@example.com')
 
-# settings.py
+# Google Maps API Key
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
+
+# 環境変数から REDIS_URL を取得 (Render / Upstash 用)
+REDIS_URL = os.environ.get('REDIS_URL')
+
+if REDIS_URL:
+    url = urlparse(REDIS_URL)
+    
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [{
+                    "address": REDIS_URL,
+                    # Upstash等の TLS接続 (rediss://) の場合に必要な暗号化オプション
+                    "ssl_cert_reqs": None if url.scheme == 'rediss' else 'required',
+                }],
+            },
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }

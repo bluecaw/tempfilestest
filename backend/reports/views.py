@@ -1,21 +1,25 @@
+# backend/reports/views.py
+
 import uuid
 import json
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.throttling import AnonRateThrottle  # ★ スロットルをインポート
+from rest_framework.throttling import AnonRateThrottle
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponseRedirect, JsonResponse
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User  # ★ 追加
-from django.core.mail import send_mail  # ★ 追加
+from django.contrib.auth.models import User
+from django.core.mail import send_mail
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 
 from .models import Report, Attachment, OperationLog, PasswordResetOTP
 from .serializers import ReportSerializer, AttachmentSerializer, AttachmentUploadSerializer
 from .s3_utils import R2Service
+from .utils import send_realtime_notification  # ★ 通知ヘルパーのインポート
 
 
 # --------------------------------------------------
@@ -52,10 +56,68 @@ class ReportViewSet(viewsets.ModelViewSet):
         report = serializer.save(created_by=self.request.user)
         log_operation(self.request.user, 'CREATE', 'Report', report.id, f"件名: {report.title}", self.request)
 
+        # ★ 日報作成時：上司（UserProfile等のリレーション）が存在すれば通知を送信
+        # ※ 上司モデルの定義に合わせて参照部分を調整してください
+        boss = None
+        if hasattr(self.request.user, 'userprofile') and hasattr(self.request.user.userprofile, 'boss'):
+            boss = self.request.user.userprofile.boss
+
+        if boss:
+            send_realtime_notification(
+                user_id=boss.id,
+                notification_type="NEW_REPORT",
+                message=f"{self.request.user.username} さんから新しい日報が提出されました。",
+                report_id=report.id
+            )
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         log_operation(request.user, 'READ', 'Report', instance.id, f"閲覧件名: {instance.title}", request)
         return super().retrieve(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'], url_path='remand')
+    def remand_report(self, request, pk=None):
+        """★ 上司による差し戻しアクション"""
+        report = self.get_object()
+        comment = request.data.get('comment', '')
+
+        # ステータスフィールドが存在する場合の処理例
+        if hasattr(report, 'status'):
+            report.status = 'REMANDED'
+            report.save()
+
+        log_operation(request.user, 'UPDATE', 'Report', report.id, f"差し戻し: {report.title}", request)
+
+        # 作成者（部下）へ差し戻し通知を送信
+        send_realtime_notification(
+            user_id=report.created_by.id,
+            notification_type="REPORT_REMANDED",
+            message=f"日報「{report.title}」が差し戻されました。コメント: {comment}",
+            report_id=report.id
+        )
+
+        return Response({"detail": "日報を差し戻しました。"}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='approve')
+    def approve_report(self, request, pk=None):
+        """★ 上司による承認アクション"""
+        report = self.get_object()
+
+        if hasattr(report, 'status'):
+            report.status = 'APPROVED'
+            report.save()
+
+        log_operation(request.user, 'UPDATE', 'Report', report.id, f"承認: {report.title}", request)
+
+        # 作成者（部下）へ承認通知を送信
+        send_realtime_notification(
+            user_id=report.created_by.id,
+            notification_type="REPORT_APPROVED",
+            message=f"日報「{report.title}」が承認されました。",
+            report_id=report.id
+        )
+
+        return Response({"detail": "日報を承認しました。"}, status=status.HTTP_200_OK)
 
 
 class AttachmentUploadView(APIView):
@@ -131,7 +193,7 @@ class AttachmentDownloadView(APIView):
 class GetCSRFTokenView(APIView):
     """起動時に呼び出し、CSRFクッキーを付与するビュー"""
     permission_classes = [AllowAny]
-    throttle_classes = [AnonRateThrottle]  # ★ settings.py の 10/minute が適用される
+    throttle_classes = [AnonRateThrottle]
 
     @method_decorator(ensure_csrf_cookie)
     def get(self, request):
@@ -141,7 +203,7 @@ class GetCSRFTokenView(APIView):
 class LoginView(APIView):
     """ログイン認証ビュー（試行回数を厳格に制限）"""
     permission_classes = [AllowAny]
-    throttle_classes = [LoginAnonRateThrottle]  # ★ 1分間に5回までに制限
+    throttle_classes = [LoginAnonRateThrottle]
 
     def post(self, request):
         username = request.data.get('username')
@@ -150,7 +212,7 @@ class LoginView(APIView):
         user = authenticate(request, username=username, password=password)
 
         if user is not None:
-            login(request, user)  # セッション・クッキーを発行
+            login(request, user)
             log_operation(user, 'LOGIN', 'User', user.id, f"ログイン成功: {user.username}", request)
             return Response({
                 'message': 'Login successful',
@@ -181,6 +243,7 @@ class UserView(APIView):
             'email': request.user.email,
         })
 
+
 # --------------------------------------------------
 # パスワードリセット専用レートリミット（1分間に3回まで）
 # --------------------------------------------------
@@ -191,7 +254,7 @@ class PasswordResetAnonRateThrottle(AnonRateThrottle):
 class RequestPasswordResetOTPView(APIView):
     """パスワードリセット用OTP（6桁コード）発行・メール送信API"""
     permission_classes = [AllowAny]
-    throttle_classes = [PasswordResetAnonRateThrottle]  # 連打防止
+    throttle_classes = [PasswordResetAnonRateThrottle]
 
     def post(self, request):
         email = request.data.get('email', '').strip()
@@ -214,7 +277,6 @@ class RequestPasswordResetOTPView(APIView):
             except Exception as e:
                 print(f"Mail Send Error: {e}")
 
-        # メール列挙攻撃防止のため、ユーザー存在有無に関わらず同じメッセージを返す
         return Response({'detail': '入力されたメールアドレス宛に認証コードを送信しました。'})
 
 
@@ -248,3 +310,22 @@ class ConfirmPasswordResetOTPView(APIView):
             return Response({'detail': 'パスワードの再設定が完了しました。'})
         else:
             return Response({'detail': '認証コードが無効、誤っているか、有効期限が切れています。'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ==========================================
+# ★ WebSocket動作検証用テストAPI（末尾に追加）
+# ==========================================
+class TestNotificationView(APIView):
+    """ログイン中の自身に対してWebSocket通知を即時発行するテストAPI"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        send_realtime_notification(
+            user_id=request.user.id,
+            notification_type="TEST_NOTIFICATION",
+            message=f"API経由でのテスト通知です！（送信先ID: {request.user.id}）",
+            report_id=999
+        )
+        return Response({
+            "detail": f"ユーザーID: {request.user.id} 宛てにリアルタイム通知を送信しました。"
+        }, status=status.HTTP_200_OK)

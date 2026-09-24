@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import api from './api';
-import PasswordReset from './PasswordReset'; // ★ 1. インポートを追加
+import PasswordReset from './PasswordReset';
+import { NotificationBell } from './NotificationBell'; // ★ 通知ベルコンポーネントをインポート
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('jwt_token') || '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [isResetMode, setIsResetMode] = useState(false); // ★ 2. 状態（state）を追加
+  const [isResetMode, setIsResetMode] = useState(false);
 
   const [reports, setReports] = useState([]);
   const [formData, setFormData] = useState({
@@ -53,6 +54,18 @@ export default function App() {
     }
   };
 
+  // 添付ファイルダウンロード処理
+  const handleDownloadAttachment = async (attachmentId) => {
+    try {
+      const res = await api.get(`/attachments/${attachmentId}/download/`);
+      if (res.data.download_url) {
+        window.open(res.data.download_url, '_blank');
+      }
+    } catch (err) {
+      console.error('ダウンロードURL取得エラー:', err);
+    }
+  };
+
   useEffect(() => {
     fetchReports();
   }, [token]);
@@ -75,7 +88,6 @@ export default function App() {
     setMessage({ type: '', text: '' });
 
     try {
-      // 1. latitude / longitude が formData に含まれている場合は除外してリクエストを作成
       const payload = {
         report_no: formData.report_no,
         reception_no: formData.reception_no,
@@ -122,7 +134,6 @@ export default function App() {
 
   // 未ログイン状態の画面表示制御
   if (!token) {
-    // パスワード再設定画面への切替
     if (isResetMode) {
       return <PasswordReset onBackToLogin={() => setIsResetMode(false)} />;
     }
@@ -159,7 +170,6 @@ export default function App() {
             </div>
             <button type="submit" className="btn-glow">ログイン</button>
 
-            {/* パスワード再設定画面への切り替えボタン */}
             <div style={{ marginTop: '16px', textAlign: 'center' }}>
               <button
                 type="button"
@@ -192,7 +202,10 @@ export default function App() {
           <img src="/vite.svg" alt="Vite Logo" style={{ width: '28px', height: '28px', marginRight: '10px' }} />
           <h1>業務報告管理システム</h1>
         </div>
-        <div className="header-right">
+        <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          {/* ★ リアルタイム通知ベルアイコンの表示 */}
+          <NotificationBell accessToken={token} />
+
           <span className="status-indicator">● オンライン</span>
           <button onClick={handleLogout} className="btn-outline">ログアウト</button>
         </div>
