@@ -111,7 +111,6 @@ ROOT_URLCONF = 'config.urls'
 # --------------------------------------------------
 ASGI_APPLICATION = 'config.asgi.application'
 
-# 環境変数から REDIS_URL を取得 (Render / Upstash 用)
 REDIS_URL = os.environ.get('REDIS_URL')
 
 if REDIS_URL:
@@ -123,17 +122,18 @@ if REDIS_URL:
             "CONFIG": {
                 "hosts": [{
                     "address": REDIS_URL,
-                    # Upstash等の TLS接続 (rediss://) 用の設定
                     "ssl_cert_reqs": None if url.scheme == 'rediss' else 'required',
+                    # 接続切断を防止するためのソケットタイムアウト設定
+                    "socket_timeout": 5,
+                    "socket_connect_timeout": 5,
+                    "socket_keepalive": True,
                 }],
-                # channels_redis で有効な正しいオプションのみを指定
                 "capacity": 1500,
                 "expiry": 10,
             },
         },
     }
 else:
-    # REDIS_URL 環境変数がない場合（ローカルテスト等）
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels.layers.InMemoryChannelLayer",
