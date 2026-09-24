@@ -19,24 +19,23 @@ class SecurityHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
 
-        # 管理画面 (/admin/) の CSP
         if request.path.startswith('/admin/'):
             response['Content-Security-Policy'] = (
                 "default-src 'self'; "
-                "style-src 'self' 'unsafe-inline'; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src 'self' data: https://fonts.gstatic.com; "
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-                "img-src 'self' data:; "
-                "font-src 'self' data:;"
+                "img-src 'self' data:;"
             )
         else:
-            # API および 一般画面用の CSP (ログインやWebSocketを疎通させる設定)
+            # Google Fonts / WebSocket (wss:) / REST API 通信をすべて許可する設定
             response['Content-Security-Policy'] = (
                 "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; "
-                "connect-src 'self' http: https: ws: wss:; "  # API通信(http/https)とWebSocket(ws/wss)を全面的に許可
-                "style-src 'self' 'unsafe-inline' https:; "
+                "connect-src 'self' http: https: ws: wss:; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src 'self' data: https://fonts.gstatic.com; "
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
                 "img-src 'self' data: https: blob:; "
-                "font-src 'self' data: https:; "
                 "frame-ancestors 'none';"
             )
         return response
