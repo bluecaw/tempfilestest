@@ -33,16 +33,13 @@ class SecurityHeadersMiddleware:
         response['Content-Security-Policy'] = csp_policy
         return response
     
-# 1. DEBUG モードの判定（SECRET_KEY より前に定義）
+# 1. DEBUG モードの判定
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
 
-# 2. SECRET_KEY は環境変数から取得
+# 2. SECRET_KEY は環境変数から取得（設定されていない場合はエラー）
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
-    if DEBUG:
-        SECRET_KEY = 'COo-I9kH5ewDEGjI0gQ1ZueYhQ2QK7j93R4Wb7ntEgi42wml1j_fGwTep90jFAqm614'
-    else:
-        raise ValueError("SECRET_KEY 環境変数が設定されていません。")
+    raise ValueError("SECRET_KEY 環境変数が設定されていません。.env ファイルまたは環境変数を確認してください。")
 
 # 3. 本番環境（DEBUG=False）の時のみ、クッキーの HTTPS 限定化を有効にする
 if not DEBUG:
