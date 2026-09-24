@@ -28,10 +28,10 @@ class SecurityHeadersMiddleware:
                 "img-src 'self' data:;"
             )
         else:
-            # http/https/ws/wss および Google Fonts をすべて許可する設定
+            # default-src を 'self' のみに絞り、connect-src に wss: を明示
             response['Content-Security-Policy'] = (
-                "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; "
-                "connect-src 'self' http: https: ws: wss: report-django-backend.onrender.com; "
+                "default-src 'self'; "
+                "connect-src 'self' https: wss: ws: https://report-django-backend.onrender.com wss://report-django-backend.onrender.com; "
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "font-src 'self' data: https://fonts.gstatic.com; "
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
