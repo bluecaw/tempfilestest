@@ -18,26 +18,16 @@ class SecurityHeadersMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-
-        if request.path.startswith('/admin/'):
-            response['Content-Security-Policy'] = (
-                "default-src 'self'; "
-                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-                "font-src 'self' data: https://fonts.gstatic.com; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-                "img-src 'self' data:;"
-            )
-        else:
-            # default-src を 'self' のみに絞り、connect-src に wss: を明示
-            response['Content-Security-Policy'] = (
-                "default-src 'self'; "
-                "connect-src 'self' https: wss: ws: https://report-django-backend.onrender.com wss://report-django-backend.onrender.com; "
-                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-                "font-src 'self' data: https://fonts.gstatic.com; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
-                "img-src 'self' data: https: blob:; "
-                "frame-ancestors 'none';"
-            )
+        # connect-src に 'self' https: wss: ws: を確実に設定
+        response['Content-Security-Policy'] = (
+            "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; "
+            "connect-src 'self' https: wss: ws: report-django-backend.onrender.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
+            "img-src 'self' data: https: blob:; "
+            "frame-ancestors 'none';"
+        )
         return response
     
 # 1. DEBUG モードの判定（SECRET_KEY より前に定義）
@@ -95,8 +85,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
     'config.settings.SecurityHeadersMiddleware',
+    'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -283,3 +273,11 @@ else:
             "BACKEND": "channels.layers.InMemoryChannelLayer",
         },
     }
+
+# SecurityHeadersMiddleware を削除し、Django標準の安全な CSP またはヘッダーを直接適用
+# settings.py の末尾に追加してください
+
+# Connect-src に wss: を許可
+CSP_CONNECT_SRC = ("'self'", "https:", "wss:", "ws:", "report-django-backend.onrender.com")
+
+# もし django-csp パッケージ等を使っていない場合は、最上部の MIDDLEWARE 設定を確認します
