@@ -63,9 +63,17 @@ const PORTAL_SECTIONS = [
         ],
     },
     {
-        category: '🛠️ 外部 API & ソースコード',
-        description: 'APIキー・使用量モニター・リポジトリ',
+        category: '🛠️ 外部 API & 開発ツール',
+        description: 'APIキー・メールテスト・使用量モニター・リポジトリ',
         links: [
+            {
+                title: 'Mailtrap',
+                url: 'https://mailtrap.io/inboxes',
+                description: 'パスワードリセット等のテストメール送信・受信ログの確認',
+                badge: 'DevOps',
+                badgeColor: 'badge-purple',
+                icon: '✉️',
+            },
             {
                 title: 'Google Cloud Console',
                 url: 'https://console.cloud.google.com/google/maps-apis/overview',
