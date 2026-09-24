@@ -8,6 +8,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.throttling import AnonRateThrottle
+from rest_framework.filters import SearchFilter, OrderingFilter
+from django_filters.rest_framework import DjangoFilterBackend
+from .filters import ReportFilter
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponseRedirect, JsonResponse
 from django.contrib.auth import authenticate, login, logout
@@ -47,12 +50,30 @@ def log_operation(user, action, target_model, target_id, details="", request=Non
     )
 
 
-# backend/reports/views.py の ReportViewSet 部分
+# backend/reports/views.py
 
 class ReportViewSet(viewsets.ModelViewSet):
     queryset = Report.objects.all().prefetch_related('attachments', 'created_by')
     serializer_class = ReportSerializer
     permission_classes = [IsAuthenticated]
+
+    # ★ 1. フィルターバックエンドを追加
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+
+    # ★ 2. 作成した FilterSet を指定（日付・作成者・ステータス用）
+    filterset_class = ReportFilter
+
+    # ★ 3. あいまい検索 (?search=...) 対象のフィールドを指定
+    search_fields = [
+        'title',
+        'description',
+        'report_no',
+        'reception_no',
+        'address',
+    ]
+
+    # ★ 4. ソート対象フィールドを指定
+    ordering_fields = ['date', 'created_at', 'status']
 
     def perform_create(self, serializer):
         report = serializer.save(created_by=self.request.user)
@@ -63,7 +84,7 @@ class ReportViewSet(viewsets.ModelViewSet):
         if hasattr(self.request.user, 'userprofile') and hasattr(self.request.user.userprofile, 'boss'):
             boss = self.request.user.userprofile.boss
 
-        # ★ 2. 上司が設定されていれば上司へ、設定されていなければテスト/全体用に全ユーザー通知（または自分以外へ通知）
+        # ★ 2. 上司が設定されていれば上司へ、設定されていなければテスト/全体用に全ユーザー通知
         if boss:
             send_realtime_notification(
                 user_id=boss.id,
@@ -72,14 +93,12 @@ class ReportViewSet(viewsets.ModelViewSet):
                 report_id=report.id
             )
         else:
-            # 【テスト用フォールバック】上司未設定の場合は、全体グループへ飛ばす、または自分以外の全ユーザー宛に送る
-            # もし send_realtime_notification が user_id=None 等で全体送信に対応している場合、または以下のように直接発火
             from asgiref.sync import async_to_sync
             from channels.layers import get_channel_layer
 
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
-                'notifications_all',  # 全体通知グループ
+                'notifications_all',
                 {
                     'type': 'send_notification',
                     'message': {
@@ -101,14 +120,12 @@ class ReportViewSet(viewsets.ModelViewSet):
         report = self.get_object()
         comment = request.data.get('comment', '')
 
-        # ステータスフィールドが存在する場合の処理例
         if hasattr(report, 'status'):
             report.status = 'REMANDED'
             report.save()
 
         log_operation(request.user, 'UPDATE', 'Report', report.id, f"差し戻し: {report.title}", request)
 
-        # 作成者（部下）へ差し戻し通知を送信
         send_realtime_notification(
             user_id=report.created_by.id,
             notification_type="REPORT_REMANDED",
@@ -129,7 +146,6 @@ class ReportViewSet(viewsets.ModelViewSet):
 
         log_operation(request.user, 'UPDATE', 'Report', report.id, f"承認: {report.title}", request)
 
-        # 作成者（部下）へ承認通知を送信
         send_realtime_notification(
             user_id=report.created_by.id,
             notification_type="REPORT_APPROVED",

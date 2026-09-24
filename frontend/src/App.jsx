@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from './api';
 import PasswordReset from './PasswordReset';
-import { NotificationBell } from './NotificationBell'; // ★ 通知ベルコンポーネントをインポート
+import { NotificationBell } from './NotificationBell';
+import { ReportFilterBar } from './ReportFilterBar'; // ★ 検索・フィルターバーのインポート
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('jwt_token') || '');
@@ -10,6 +11,7 @@ export default function App() {
   const [isResetMode, setIsResetMode] = useState(false);
 
   const [reports, setReports] = useState([]);
+  const [filters, setFilters] = useState({}); // ★ 検索・フィルター条件の状態管理
   const [formData, setFormData] = useState({
     report_no: '',
     reception_no: '',
@@ -43,15 +45,39 @@ export default function App() {
     setMessage({ type: 'info', text: 'ログアウトしました。' });
   };
 
-  // 報告一覧の取得
-  const fetchReports = async () => {
+  // ★ 報告一覧の取得（フィルター条件を反映）
+  const fetchReports = useCallback(async (currentFilters = filters) => {
     if (!token) return;
     try {
-      const res = await api.get('/reports/');
-      setReports(res.data);
+      // 空値のパラメータを除外して作成
+      const params = {};
+      Object.entries(currentFilters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          params[key] = value;
+        }
+      });
+
+      const res = await api.get('/reports/', { params });
+      // DRF のページネーション（results）あり・なし両方に対応
+      setReports(Array.isArray(res.data) ? res.data : res.data.results || []);
     } catch (err) {
       console.error('報告一覧の取得に失敗しました:', err);
     }
+  }, [token, filters]);
+
+  // ★ トークンまたはフィルター条件変更時に自動で取得
+  useEffect(() => {
+    fetchReports(filters);
+  }, [token, filters, fetchReports]);
+
+  // ★ 検索実行ハンドラー
+  const handleSearch = (newFilters) => {
+    setFilters(newFilters);
+  };
+
+  // ★ 検索リセットハンドラー
+  const handleReset = () => {
+    setFilters({});
   };
 
   // 添付ファイルダウンロード処理
@@ -65,10 +91,6 @@ export default function App() {
       console.error('ダウンロードURL取得エラー:', err);
     }
   };
-
-  useEffect(() => {
-    fetchReports();
-  }, [token]);
 
   // フォーム入力変更
   const handleInputChange = (e) => {
@@ -203,9 +225,7 @@ export default function App() {
           <h1>業務報告管理システム</h1>
         </div>
         <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          {/* ★ リアルタイム通知ベルアイコンの表示 */}
           <NotificationBell accessToken={token} />
-
           <span className="status-indicator">● オンライン</span>
           <button onClick={handleLogout} className="btn-outline">ログアウト</button>
         </div>
@@ -291,10 +311,13 @@ export default function App() {
             <h2>登録済み報告一覧 ({reports.length} 件)</h2>
           </div>
 
+          {/* ★ 検索・フィルターバーを配置 */}
+          <ReportFilterBar onSearch={handleSearch} onReset={handleReset} />
+
           <div className="reports-scroll">
             {reports.length === 0 ? (
               <div className="empty-state">
-                <p>登録された業務報告はありません。</p>
+                <p>該当する業務報告はありません。</p>
               </div>
             ) : (
               reports.map(r => (
