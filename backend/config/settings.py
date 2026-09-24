@@ -104,6 +104,11 @@ ROOT_URLCONF = 'config.urls'
 # --------------------------------------------------
 # ASGI / Channel Layer 設定
 # --------------------------------------------------
+# backend/config/settings.py
+
+# --------------------------------------------------
+# ASGI / Channel Layer 設定
+# --------------------------------------------------
 ASGI_APPLICATION = 'config.asgi.application'
 
 # 環境変数から REDIS_URL を取得 (Render / Upstash 用)
@@ -121,10 +126,9 @@ if REDIS_URL:
                     # Upstash等の TLS接続 (rediss://) 用の設定
                     "ssl_cert_reqs": None if url.scheme == 'rediss' else 'required',
                 }],
-                # ★ タイムアウト・切断防止の設定を追加
+                # channels_redis で有効な正しいオプションのみを指定
                 "capacity": 1500,
                 "expiry": 10,
-                "health_check_interval": 15,  # 15秒ごとにヘルスチェックを行って接続を維持
             },
         },
     }
