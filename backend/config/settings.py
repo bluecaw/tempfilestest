@@ -16,8 +16,10 @@ class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
-def __call__(self, request):
+    def __call__(self, request):
         response = self.get_response(request)
+
+        # 管理画面 (/admin/) の CSP
         if request.path.startswith('/admin/'):
             response['Content-Security-Policy'] = (
                 "default-src 'self'; "
@@ -27,17 +29,17 @@ def __call__(self, request):
                 "font-src 'self' data:;"
             )
         else:
-            # ★ WebSocket (wss:)、スタイル (unsafe-inline)、画像等の接続を許可するように緩和
+            # API および 一般画面用の CSP (ログインやWebSocketを疎通させる設定)
             response['Content-Security-Policy'] = (
-                "default-src 'self'; "
-                "connect-src 'self' wss: https:; "  # wss: (WebSocket) を許可
-                "style-src 'self' 'unsafe-inline'; " # インラインスタイルを許可
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-                "img-src 'self' data: https:; "
-                "font-src 'self' data:;"
+                "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; "
+                "connect-src 'self' http: https: ws: wss:; "  # API通信(http/https)とWebSocket(ws/wss)を全面的に許可
+                "style-src 'self' 'unsafe-inline' https:; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
+                "img-src 'self' data: https: blob:; "
+                "font-src 'self' data: https:; "
+                "frame-ancestors 'none';"
             )
         return response
-
 
 # 1. DEBUG モードの判定（SECRET_KEY より前に定義）
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
