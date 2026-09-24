@@ -106,16 +106,27 @@ ROOT_URLCONF = 'config.urls'
 # --------------------------------------------------
 ASGI_APPLICATION = 'config.asgi.application'
 
-REDIS_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
+# settings.py の末尾付近（REDIS_URL の処理部分）を以下に置き換え
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [REDIS_URL],
+REDIS_URL = os.environ.get('REDIS_URL')
+
+if REDIS_URL:
+    # ssl_cert_reqs のエラーを回避し、Render / Upstash (rediss://) に安全に接続する設定
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+            },
         },
-    },
-}
+    }
+else:
+    # REDIS_URL 環境変数がない場合（ローカルテスト等）はメモリ層を使用
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 
 TEMPLATES = [
     {

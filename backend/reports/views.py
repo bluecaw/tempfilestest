@@ -47,6 +47,8 @@ def log_operation(user, action, target_model, target_id, details="", request=Non
     )
 
 
+# backend/reports/views.py の ReportViewSet 部分
+
 class ReportViewSet(viewsets.ModelViewSet):
     queryset = Report.objects.all().prefetch_related('attachments', 'created_by')
     serializer_class = ReportSerializer
@@ -56,18 +58,36 @@ class ReportViewSet(viewsets.ModelViewSet):
         report = serializer.save(created_by=self.request.user)
         log_operation(self.request.user, 'CREATE', 'Report', report.id, f"件名: {report.title}", self.request)
 
-        # ★ 日報作成時：上司（UserProfile等のリレーション）が存在すれば通知を送信
-        # ※ 上司モデルの定義に合わせて参照部分を調整してください
+        # ★ 1. 上司（boss）の判定
         boss = None
         if hasattr(self.request.user, 'userprofile') and hasattr(self.request.user.userprofile, 'boss'):
             boss = self.request.user.userprofile.boss
 
+        # ★ 2. 上司が設定されていれば上司へ、設定されていなければテスト/全体用に全ユーザー通知（または自分以外へ通知）
         if boss:
             send_realtime_notification(
                 user_id=boss.id,
                 notification_type="NEW_REPORT",
                 message=f"{self.request.user.username} さんから新しい日報が提出されました。",
                 report_id=report.id
+            )
+        else:
+            # 【テスト用フォールバック】上司未設定の場合は、全体グループへ飛ばす、または自分以外の全ユーザー宛に送る
+            # もし send_realtime_notification が user_id=None 等で全体送信に対応している場合、または以下のように直接発火
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                'notifications_all',  # 全体通知グループ
+                {
+                    'type': 'send_notification',
+                    'message': {
+                        'notification_type': 'NEW_REPORT',
+                        'message': f"【全体通知】{self.request.user.username} さんが日報「{report.title}」を作成しました。",
+                        'report_id': report.id
+                    }
+                }
             )
 
     def retrieve(self, request, *args, **kwargs):
