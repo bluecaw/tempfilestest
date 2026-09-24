@@ -13,24 +13,23 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 await self.close()
                 return
 
-            # 1. ユーザー個人のグループ名を作成 (例: user_1)
+            # グループ名の決定
             self.user_group_name = f"user_{self.user.id}"
-            # 2. 全体通知用のグループ名を作成
             self.all_group_name = "notifications_all"
 
-            # 個人グループに参加
+            # ★重要: 先に WebSocket 接続を確定（accept）させてタイムアウトを防ぐ
+            await self.accept()
+            print(f"WebSocket Connected: user_{self.user.id}")
+
+            # 接続確定後に Redis のグループへ参加
             await self.channel_layer.group_add(
                 self.user_group_name,
                 self.channel_name
             )
-            # 全体グループに参加
             await self.channel_layer.group_add(
                 self.all_group_name,
                 self.channel_name
             )
-
-            await self.accept()
-            print(f"WebSocket Connected: user_{self.user.id}")
 
         except Exception as e:
             print(f"WebSocket Connect Error: {e}")
@@ -38,13 +37,11 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         try:
-            # 個人グループから離脱
             if hasattr(self, 'user_group_name'):
                 await self.channel_layer.group_discard(
                     self.user_group_name,
                     self.channel_name
                 )
-            # 全体グループから離脱
             if hasattr(self, 'all_group_name'):
                 await self.channel_layer.group_discard(
                     self.all_group_name,
@@ -53,24 +50,21 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             print(f"WebSocket Disconnect Error: {e}")
 
-    # ★ 追加: フロントエンドからの Ping (Keep-Alive) 受信処理
+    # クライアントからの Ping (Keep-Alive) 受信処理
     async def receive(self, text_data=None, bytes_data=None):
         if text_data:
             try:
                 data = json.loads(text_data)
-                # Ping を受け取ったら Pong を返答
                 if data.get("type") == "ping":
                     await self.send(text_data=json.dumps({"type": "pong"}))
             except Exception as e:
                 print(f"WebSocket Receive Error: {e}")
 
-    # Djangoの別処理（viewsなど）から通知が飛ばされた時に呼ばれる
+    # 通知送出処理
     async def send_notification(self, event):
         try:
-            # views.py の送出形式に合わせて柔軟にデータをパース
             message_data = event.get('message', {})
             
-            # dict形式で包まれている場合とフラットな場合の双方に対応
             if isinstance(message_data, dict):
                 payload = {
                     'notification_type': message_data.get('notification_type', event.get('notification_type')),

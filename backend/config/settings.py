@@ -106,6 +106,10 @@ ROOT_URLCONF = 'config.urls'
 # --------------------------------------------------
 # backend/config/settings.py
 
+# backend/config/settings.py
+
+# backend/config/settings.py
+
 # --------------------------------------------------
 # ASGI / Channel Layer 設定
 # --------------------------------------------------
@@ -123,9 +127,9 @@ if REDIS_URL:
                 "hosts": [{
                     "address": REDIS_URL,
                     "ssl_cert_reqs": None if url.scheme == 'rediss' else 'required',
-                    # 接続切断を防止するためのソケットタイムアウト設定
-                    "socket_timeout": 5,
-                    "socket_connect_timeout": 5,
+                    # Upstash Redis の切断防止設定（ソケット維持）
+                    "socket_timeout": 15,
+                    "socket_connect_timeout": 15,
                     "socket_keepalive": True,
                 }],
                 "capacity": 1500,
