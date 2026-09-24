@@ -11,23 +11,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env file if present
 load_dotenv(os.path.join(BASE_DIR.parent, '.env'))
 
-# Security Middleware Class
 class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         response = self.get_response(request)
-        # connect-src に 'self' https: wss: ws: を確実に設定
-        response['Content-Security-Policy'] = (
+
+        # connect-src に wss: および ws: を強制的にセット
+        csp_policy = (
             "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; "
-            "connect-src 'self' https: wss: ws: report-django-backend.onrender.com; "
+            "connect-src 'self' http: https: ws: wss: report-django-backend.onrender.com wss://report-django-backend.onrender.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' data: https://fonts.gstatic.com; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
             "img-src 'self' data: https: blob:; "
             "frame-ancestors 'none';"
         )
+
+        response['Content-Security-Policy'] = csp_policy
         return response
     
 # 1. DEBUG モードの判定（SECRET_KEY より前に定義）
