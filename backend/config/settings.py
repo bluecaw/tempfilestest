@@ -16,9 +16,8 @@ class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
-    def __call__(self, request):
+def __call__(self, request):
         response = self.get_response(request)
-        # 管理画面 (/admin/) の場合は CSS や JS、画像の読み込みを許可する
         if request.path.startswith('/admin/'):
             response['Content-Security-Policy'] = (
                 "default-src 'self'; "
@@ -28,8 +27,15 @@ class SecurityHeadersMiddleware:
                 "font-src 'self' data:;"
             )
         else:
-            # API 用の厳格な CSP ヘッダー
-            response['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none';"
+            # ★ WebSocket (wss:)、スタイル (unsafe-inline)、画像等の接続を許可するように緩和
+            response['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "connect-src 'self' wss: https:; "  # wss: (WebSocket) を許可
+                "style-src 'self' 'unsafe-inline'; " # インラインスタイルを許可
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "img-src 'self' data: https:; "
+                "font-src 'self' data:;"
+            )
         return response
 
 
