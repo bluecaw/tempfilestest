@@ -3,7 +3,7 @@ import api from './api';
 import PasswordReset from './PasswordReset';
 import { NotificationBell } from './NotificationBell';
 import { ReportFilterBar } from './ReportFilterBar';
-import Portal from './Portal'; // ★ 1. Portal コンポーネントをインポート
+import Portal from './Portal';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -15,7 +15,7 @@ export default function App() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isResetMode, setIsResetMode] = useState(false);
-  const [currentView, setCurrentView] = useState('reports'); // ★ 2. 表示画面の状態管理 ('reports' | 'portal')
+  const [currentView, setCurrentView] = useState('reports');
 
   const [reports, setReports] = useState([]);
   const [filters, setFilters] = useState({});
@@ -29,6 +29,7 @@ export default function App() {
   });
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false); // ★ 位置情報取得中のローディング状態
   const [message, setMessage] = useState({ type: '', text: '' });
 
   // JWT ログイン処理
@@ -99,6 +100,69 @@ export default function App() {
   // フォーム入力変更
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // ★ 現在地（GPS）から住所を自動取得する処理（完全無料：国土地理院 API）
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      alert('お使いのブラウザは位置情報（GPS）に対応していません。');
+      return;
+    }
+
+    setGeoLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+
+          // 国土地理院 逆ジオコーディング API
+          const res = await fetch(
+            `https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon=${longitude}&lat=${latitude}`
+          );
+
+          if (!res.ok) throw new Error('住所情報の取得に失敗しました');
+
+          const data = await res.json();
+          if (data.results) {
+            // 町丁目名までの住所文字列を抽出
+            const addressText = data.results.lv01Nm || '';
+
+            if (addressText) {
+              setFormData((prev) => ({ ...prev, address: addressText }));
+              setMessage({ type: 'success', text: '現在地から住所を自動入力しました。' });
+            } else {
+              alert('該当する住所情報が見つかりませんでした。');
+            }
+          } else {
+            alert('該当する住所情報が見つかりませんでした。');
+          }
+        } catch (error) {
+          console.error('位置情報変換エラー:', error);
+          alert('住所の自動取得に失敗しました。手動で入力してください。');
+        } finally {
+          setGeoLoading(false);
+        }
+      },
+      (error) => {
+        setGeoLoading(false);
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            alert('位置情報の利用が拒否されました。ブラウザの権限設定をご確認ください。');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            alert('位置情報が取得できませんでした。');
+            break;
+          case error.TIMEOUT:
+            alert('位置情報の取得がタイムアウトしました。');
+            break;
+          default:
+            alert('位置情報の取得に失敗しました。');
+            break;
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   // 添付ファイル選択
@@ -227,7 +291,6 @@ export default function App() {
           <h1>業務報告管理システム</h1>
         </div>
         <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* ★ 3. 画面切替ボタン */}
           {currentView === 'reports' ? (
             <button onClick={() => setCurrentView('portal')} className="btn-outline">
               🔗 関連リンク集
@@ -251,7 +314,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ★ 4. 表示ビューの判定制御 */}
       {currentView === 'portal' ? (
         <Portal onBack={() => setCurrentView('reports')} />
       ) : (
@@ -274,7 +336,6 @@ export default function App() {
                         handleInputChange({ target: { name: 'date', value: '' } });
                         return;
                       }
-                      // YYYY-MM-DD 形式の文字列に変換して既存の formData にセット
                       const year = date.getFullYear();
                       const month = String(date.getMonth() + 1).padStart(2, '0');
                       const day = String(date.getDate()).padStart(2, '0');
@@ -310,10 +371,39 @@ export default function App() {
                 </div>
               </div>
 
+              {/* ★ 住所入力欄（自動取得ボタン付き） */}
               <div className="form-row">
                 <div className="input-field full-width">
-                  <label>住所</label>
-                  <input type="text" name="address" placeholder="例: 東京都千代田区1-1-1" value={formData.address} onChange={handleInputChange} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label style={{ margin: 0 }}>住所</label>
+                    <button
+                      type="button"
+                      onClick={handleGetLocation}
+                      disabled={geoLoading}
+                      style={{
+                        background: 'rgba(56, 189, 248, 0.15)',
+                        color: '#38bdf8',
+                        border: '1px solid rgba(56, 189, 248, 0.4)',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        fontSize: '12px',
+                        cursor: geoLoading ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      {geoLoading ? '📍 取得中...' : '📍 現在地から自動入力'}
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    name="address"
+                    placeholder="例: 東京都千代田区1-1-1"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                  />
                 </div>
               </div>
 

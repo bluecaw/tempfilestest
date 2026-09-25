@@ -568,3 +568,25 @@ body {
   background-color: #2563eb;
   color: #ffffff;
 }
+
+.btn-location-search {
+  background-color: #334155;
+  color: #38bdf8;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-location-search:hover:not(:disabled) {
+  background-color: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+.btn-location-search:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
