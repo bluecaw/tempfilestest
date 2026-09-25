@@ -114,7 +114,10 @@ export default function App() {
   };
 
   // ★ 現在地（GPS）から住所を自動取得する処理（完全無料：国土地理院 API）
-  // 国土地理院の muni.js を安全にパースする処理
+  // ★重要: 関数の外側（グローバルスコープ）で定義します
+  let gsiMuniMap = null;
+
+  // 国土地理院の muni.js を安全に取得・解析する関数
   const fetchMuniMap = async () => {
     if (gsiMuniMap) return gsiMuniMap;
     try {
@@ -123,25 +126,26 @@ export default function App() {
 
       const text = await res.text();
 
-      // HTMLが返ってきていないかチェック (<!DOCTYPE など)
+      // HTMLが返ってきていないかチェック (<!DOCTYPE 等)
       if (text.trim().startsWith('<')) {
-        throw new Error('レスポンスがHTMLです。URLまたはネットワークを確認してください。');
+        throw new Error('レスポンスがHTMLです');
       }
 
-      // GSI.MuniData = { ... }; のレスポンスから JSON 部分だけを抽出
+      // GSI.MuniData = { ... }; から JSON オブジェクト部分のみを抽出
       const jsonMatch = text.match(/GSI\.MuniData\s*=\s*(\{[\s\S]*\});?/);
       if (!jsonMatch || !jsonMatch[1]) {
-        throw new Error('muni.js のデータ構造の抽出に失敗しました');
+        throw new Error('muni.js のデータ構造解析に失敗しました');
       }
 
       gsiMuniMap = JSON.parse(jsonMatch[1]);
       return gsiMuniMap;
     } catch (e) {
       console.error('市区町村マスターの取得に失敗しました:', e);
-      return null; // エラー時は null を返す
+      return null;
     }
   };
 
+  // コンポーネント内の位置情報取得ハンドラー
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       alert('お使いのブラウザは位置情報（GPS）に対応していません。');
@@ -155,7 +159,7 @@ export default function App() {
         try {
           const { latitude, longitude } = position.coords;
 
-          // 国土地理院 逆ジオコーディング API & 市区町村マスターを取得
+          // API 呼び出しと自治体マスター取得を並列で実行
           const [res, muniData] = await Promise.all([
             fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon=${longitude}&lat=${latitude}`),
             fetchMuniMap()
@@ -168,18 +172,19 @@ export default function App() {
             const { muniCd, lv01Nm } = data.results;
             let fullAddress = '';
 
-            // muniData が取得できている場合は組み合わせる
+            // 自治体コード（muniCd）が存在する場合は市区町村名を付与
             if (muniData && muniData[muniCd]) {
               const parts = muniData[muniCd].split(',');
               // parts[1]: 都道府県 (例: 東京都)
               // parts[2]: 市区町村 (例: 千代田区)
               const muniName = parts[2] || '';
-              fullAddress = `${muniName}${lv01Nm || ''}`; // 千代田区霞が関三丁目
 
-              // ※ 都道府県も付けたい場合はこちら:
+              // 例: "千代田区" + "霞が関三丁目" = "千代田区霞が関三丁目"
+              fullAddress = `${muniName}${lv01Nm || ''}`;
+
+              // ※ 東京都も含めたい場合は以下に切り替えてください:
               // fullAddress = `${parts[1] || ''}${muniName}${lv01Nm || ''}`;
             } else {
-              // フォールバック: マスター取得失敗時は町丁目名のみ
               fullAddress = lv01Nm || '';
             }
 
