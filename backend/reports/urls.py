@@ -30,5 +30,5 @@ urlpatterns = [
     path('auth/password-reset/request/', RequestPasswordResetOTPView.as_view(), name='password_reset_request'),
     path('auth/password-reset/confirm/', ConfirmPasswordResetOTPView.as_view(), name='password_reset_confirm'),
     path('test-notification/', TestNotificationView.as_view(), name='test-notification'),
-    path('api/webhooks/slack/actions/', SlackActionWebhookView.as_view(), name='slack_actions_webhook'),
+    path('webhooks/slack/actions/', SlackActionWebhookView.as_view(), name='slack_actions_webhook'),
 ]
