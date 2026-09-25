@@ -114,6 +114,25 @@ export default function App() {
   };
 
   // ★ 現在地（GPS）から住所を自動取得する処理（完全無料：国土地理院 API）
+  // 国土地理院の市区町村コード（muniCd）を市区町村名に変換する辞書データキャッシュ
+  let gsiMuniMap = null;
+
+  const fetchMuniMap = async () => {
+    if (gsiMuniMap) return gsiMuniMap;
+    try {
+      // 国土地理院公式の自治体コードマスターを取得
+      const res = await fetch('https://mreversegeocoder.gsi.go.jp/reverse-geocoder/parameter/muni.js');
+      const text = await res.text();
+      // GSI.MuniData = { ... } というJavaScriptファイルをオブジェクト化
+      const jsonText = text.replace(/^GSI\.MuniData\s*=\s*/, '').replace(/;?\s*$/, '');
+      gsiMuniMap = JSON.parse(jsonText);
+      return gsiMuniMap;
+    } catch (e) {
+      console.error('市区町村マスターの取得に失敗しました:', e);
+      return {};
+    }
+  };
+
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       alert('お使いのブラウザは位置情報（GPS）に対応していません。');
@@ -127,23 +146,37 @@ export default function App() {
         try {
           const { latitude, longitude } = position.coords;
 
-          // 国土地理院 逆ジオコーディング API
-          const res = await fetch(
-            `https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon=${longitude}&lat=${latitude}`
-          );
+          // 国土地理院 逆ジオコーディング API & 市区町村マスターを並行取得
+          const [res, muniData] = await Promise.all([
+            fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon=${longitude}&lat=${latitude}`),
+            fetchMuniMap()
+          ]);
 
           if (!res.ok) throw new Error('住所情報の取得に失敗しました');
 
           const data = await res.json();
           if (data.results) {
-            // 町丁目名までの住所文字列を抽出（例: 東京都千代田区霞が関三丁目）
-            const addressText = data.results.lv01Nm || '';
+            const { muniCd, lv01Nm } = data.results;
 
-            if (addressText) {
-              setFormData((prev) => ({ ...prev, address: addressText }));
+            // muniCd から 都道府県・市区町村名 を特定 (例: "13101" -> "東京都,千代田区")
+            const muniInfo = muniData[muniCd];
+            let fullAddress = '';
+
+            if (muniInfo) {
+              const [, prefAndMuni] = muniInfo.split(','); // "13101,東京都,千代田区..." などの形式
+              // 東京都も含める場合: `${muniInfo.split(',')[1]}${muniInfo.split(',')[2]}${lv01Nm || ''}`
+              // 「千代田区霞が関三丁目」のように市区町村名から繋げる場合:
+              const muniName = muniInfo.split(',')[2] || '';
+              fullAddress = `${muniName}${lv01Nm || ''}`;
+            } else {
+              fullAddress = lv01Nm || '';
+            }
+
+            if (fullAddress) {
+              setFormData((prev) => ({ ...prev, address: fullAddress }));
               setMessage({ type: 'success', text: '現在地から住所を自動入力しました。' });
 
-              // 入力欄に自動フォーカス＋末尾にカーソルを移動（番地の手打ちをスムーズにする）
+              // 入力欄に自動フォーカス＋末尾にカーソルを移動
               setTimeout(() => {
                 const inputEl = document.querySelector('input[name="address"]');
                 if (inputEl) {
@@ -182,11 +215,10 @@ export default function App() {
             break;
         }
       },
-      // ★ 30秒問題を解決する高速化オプション ★
       {
-        enableHighAccuracy: false, // GPS衛生の精密測位待機をオフにし、Wi-Fi/基地局で即座に座標取得
-        timeout: 5000,             // 5秒で応答がなければタイムアウト処理にする
-        maximumAge: 60000          // 過去60秒以内の既存の位置情報キャッシュがあれば即座に再利用
+        enableHighAccuracy: false,
+        timeout: 5000,
+        maximumAge: 60000
       }
     );
   };
