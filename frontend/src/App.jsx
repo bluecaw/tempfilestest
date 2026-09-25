@@ -27,15 +27,28 @@ export default function App() {
     address: '',
     description: ''
   });
+
+  // ★ 報告編集機能用の State
+  const [editingReport, setEditingReport] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    report_no: '',
+    reception_no: '',
+    date: '',
+    title: '',
+    address: '',
+    description: ''
+  });
+  const [editLoading, setEditLoading] = useState(false);
+
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [geoLoading, setGeoLoading] = useState(false); // 位置情報取得中のローディング状態
+  const [geoLoading, setGeoLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  // 国土地理院の自治体マスター（muni.js）キャッシュ用 Ref
+  // 国土地理院自治体マスターキャッシュ用 Ref
   const gsiMuniMapRef = useRef(null);
 
-  // メッセージが表示されたら 5 秒後に自動で消去するタイマー
+  // メッセージ自動消去タイマー
   useEffect(() => {
     if (message.text) {
       const timer = setTimeout(() => {
@@ -67,7 +80,7 @@ export default function App() {
     setMessage({ type: 'info', text: 'ログアウトしました。' });
   };
 
-  // 報告一覧の取得（フィルター条件を反映）
+  // 報告一覧の取得
   const fetchReports = useCallback(async (currentFilters = filters) => {
     if (!token) return;
     try {
@@ -89,15 +102,9 @@ export default function App() {
     fetchReports(filters);
   }, [token, filters, fetchReports]);
 
-  // 検索実行ハンドラー
-  const handleSearch = (newFilters) => {
-    setFilters(newFilters);
-  };
-
-  // 検索リセットハンドラー
-  const handleReset = () => {
-    setFilters({});
-  };
+  // 検索・リセットハンドラー
+  const handleSearch = (newFilters) => setFilters(newFilters);
+  const handleReset = () => setFilters({});
 
   // 添付ファイルダウンロード処理
   const handleDownloadAttachment = async (attachmentId) => {
@@ -111,9 +118,49 @@ export default function App() {
     }
   };
 
-  // フォーム入力変更
+  // フォーム入力変更ハンドラー
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // ★ 編集フォームの入力変更ハンドラー
+  const handleEditInputChange = (e) => {
+    setEditFormData({ ...editFormData, [e.target.name]: e.target.value });
+  };
+
+  // ★ 編集モード開始ハンドラー
+  const handleStartEdit = (report) => {
+    setEditingReport(report);
+    setEditFormData({
+      report_no: report.report_no || '',
+      reception_no: report.reception_no || '',
+      date: report.date || '',
+      title: report.title || '',
+      address: report.address || '',
+      description: report.description || ''
+    });
+  };
+
+  // ★ 編集送信（PATCH リクエスト）ハンドラー
+  const handleUpdateSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingReport) return;
+
+    setEditLoading(true);
+    try {
+      await api.patch(`/reports/${editingReport.id}/`, editFormData);
+      setMessage({ type: 'success', text: '業務報告を更新しました。' });
+      setEditingReport(null);
+      fetchReports();
+    } catch (err) {
+      console.error('更新エラー:', err);
+      setMessage({
+        type: 'error',
+        text: '更新に失敗しました: ' + (err.response?.data?.detail || '入力内容を確認してください。')
+      });
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   // 全国版 muni.json を public フォルダから取得・キャッシュする関数
@@ -132,7 +179,7 @@ export default function App() {
     }
   };
 
-  // コンポーネント内の位置情報取得ハンドラー
+  // 現在地取得ハンドラー
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       alert('お使いのブラウザは位置情報（GPS）に対応していません。');
@@ -146,7 +193,6 @@ export default function App() {
         try {
           const { latitude, longitude } = position.coords;
 
-          // 逆ジオコーディング API 呼び出しとローカル自治体マスター取得を並列実行
           const [res, muniData] = await Promise.all([
             fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon=${longitude}&lat=${latitude}`),
             fetchMuniMap()
@@ -160,18 +206,14 @@ export default function App() {
             let fullAddress = '';
 
             if (muniData) {
-              // muniCd (例: "01101") から先頭の '0' を取り除いて "1101" のキーで検索
               const key = muniCd ? muniCd.replace(/^0+/, '') : '';
               const targetInfo = muniData[key] || muniData[muniCd];
 
               if (targetInfo) {
                 const parts = targetInfo.split(',');
-                // parts[1]: 都道府県 (例: 北海道)
-                // parts[3]: 市区町村 (例: 札幌市 中央区)
                 const prefName = parts[1] || '';
-                const muniName = (parts[3] || '').replace(/\s+/g, ''); // 全角・半角スペースの除去
+                const muniName = (parts[3] || '').replace(/\s+/g, '');
 
-                // 例: "北海道" + "札幌市中央区" + "北一条西二丁目"
                 fullAddress = `${prefName}${muniName}${lv01Nm || ''}`;
               }
             }
@@ -230,12 +272,12 @@ export default function App() {
     );
   };
 
-  // 添付ファイル選択
+  // 添付ファイル選択ハンドラー
   const handleFileChange = (e) => {
     setFiles(Array.from(e.target.files));
   };
 
-  // 業務報告登録 ＆ ファイル一括アップロード
+  // 新規業務報告登録 ＆ ファイル送信
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!token) return;
@@ -285,7 +327,7 @@ export default function App() {
     }
   };
 
-  // 未ログイン状態の画面表示制御
+  // 未ログイン表示
   if (!token) {
     if (isResetMode) {
       return <PasswordReset onBackToLogin={() => setIsResetMode(false)} />;
@@ -436,7 +478,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 住所入力欄（自動取得ボタン付き） */}
+              {/* 住所入力欄 */}
               <div className="form-row">
                 <div className="input-field full-width">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
@@ -522,7 +564,18 @@ export default function App() {
                         <span className="tag-no">No. {r.report_no}</span>
                         <span className="tag-rec">受付: {r.reception_no}</span>
                       </div>
-                      <span className="item-date">{r.date}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="item-date">{r.date}</span>
+                        {/* ★ 編集ボタン */}
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(r)}
+                          className="btn-outline"
+                          style={{ padding: '2px 8px', fontSize: '12px' }}
+                        >
+                          ✏️ 編集
+                        </button>
+                      </div>
                     </div>
 
                     <h3 className="item-title">{r.title}</h3>
@@ -546,7 +599,16 @@ export default function App() {
                     <p className="item-desc">{r.description}</p>
 
                     <div className="item-footer">
-                      <span className="item-author">👤 担当: {r.created_by?.username || '未定義'}</span>
+                      {/* ★ 担当者の柔軟なフォールバック表示 */}
+                      <span className="item-author">
+                        👤 担当: {
+                          r.created_by?.username ||
+                          (typeof r.created_by === 'string' ? r.created_by : null) ||
+                          r.user?.username ||
+                          (typeof r.user === 'string' ? r.user : null) ||
+                          '未定義'
+                        }
+                      </span>
                     </div>
 
                     {r.attachments && r.attachments.length > 0 && (
@@ -572,6 +634,132 @@ export default function App() {
             </div>
           </section>
         </main>
+      )}
+
+      {/* ★ 報告編集用モーダルダイアログ */}
+      {editingReport && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '600px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '24px',
+            borderRadius: '12px',
+            background: '#1e293b',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, color: '#f8fafc' }}>✏️ 業務報告の編集 (No. {editingReport.report_no})</h3>
+              <button
+                onClick={() => setEditingReport(null)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '20px', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateSubmit} className="report-form">
+              <div className="form-row">
+                <div className="input-field">
+                  <label>報告日付 *</label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={editFormData.date}
+                    onChange={handleEditInputChange}
+                    required
+                  />
+                </div>
+                <div className="input-field">
+                  <label>件名番号 *</label>
+                  <input
+                    type="text"
+                    name="report_no"
+                    value={editFormData.report_no}
+                    onChange={handleEditInputChange}
+                    required
+                  />
+                </div>
+                <div className="input-field">
+                  <label>受付番号 *</label>
+                  <input
+                    type="text"
+                    name="reception_no"
+                    value={editFormData.reception_no}
+                    onChange={handleEditInputChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="input-field full-width">
+                  <label>件名 *</label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={editFormData.title}
+                    onChange={handleEditInputChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="input-field full-width">
+                  <label>住所</label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={editFormData.address}
+                    onChange={handleEditInputChange}
+                  />
+                </div>
+              </div>
+
+              <div className="input-field">
+                <label>業務内容詳細 *</label>
+                <textarea
+                  name="description"
+                  rows="4"
+                  value={editFormData.description}
+                  onChange={handleEditInputChange}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingReport(null)}
+                  className="btn-outline"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="submit"
+                  disabled={editLoading}
+                  className="btn-glow"
+                >
+                  {editLoading ? '更新中...' : '更新内容を保存'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
