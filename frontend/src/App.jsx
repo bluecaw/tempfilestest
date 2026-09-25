@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from './api';
 import PasswordReset from './PasswordReset';
 import { NotificationBell } from './NotificationBell';
@@ -29,10 +29,13 @@ export default function App() {
   });
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [geoLoading, setGeoLoading] = useState(false); // ★ 位置情報取得中のローディング状態
+  const [geoLoading, setGeoLoading] = useState(false); // 位置情報取得中のローディング状態
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  // ★ メッセージが表示されたら 5 秒後に自動で消去するタイマー
+  // 国土地理院の自治体マスター（muni.js）キャッシュ用 Ref
+  const gsiMuniMapRef = useRef(null);
+
+  // メッセージが表示されたら 5 秒後に自動で消去するタイマー
   useEffect(() => {
     if (message.text) {
       const timer = setTimeout(() => {
@@ -113,32 +116,27 @@ export default function App() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // ★ 現在地（GPS）から住所を自動取得する処理（完全無料：国土地理院 API）
-  // ★重要: 関数の外側（グローバルスコープ）で定義します
-  let gsiMuniMap = null;
-
   // 国土地理院の muni.js を安全に取得・解析する関数
   const fetchMuniMap = async () => {
-    if (gsiMuniMap) return gsiMuniMap;
+    if (gsiMuniMapRef.current) return gsiMuniMapRef.current;
     try {
       const res = await fetch('https://mreversegeocoder.gsi.go.jp/reverse-geocoder/parameter/muni.js');
       if (!res.ok) throw new Error('muni.js の取得に失敗しました');
 
       const text = await res.text();
 
-      // HTMLが返ってきていないかチェック (<!DOCTYPE 等)
       if (text.trim().startsWith('<')) {
         throw new Error('レスポンスがHTMLです');
       }
 
-      // GSI.MuniData = { ... }; から JSON オブジェクト部分のみを抽出
       const jsonMatch = text.match(/GSI\.MuniData\s*=\s*(\{[\s\S]*\});?/);
       if (!jsonMatch || !jsonMatch[1]) {
         throw new Error('muni.js のデータ構造解析に失敗しました');
       }
 
-      gsiMuniMap = JSON.parse(jsonMatch[1]);
-      return gsiMuniMap;
+      const parsedData = JSON.parse(jsonMatch[1]);
+      gsiMuniMapRef.current = parsedData;
+      return parsedData;
     } catch (e) {
       console.error('市区町村マスターの取得に失敗しました:', e);
       return null;
@@ -172,18 +170,15 @@ export default function App() {
             const { muniCd, lv01Nm } = data.results;
             let fullAddress = '';
 
-            // 自治体コード（muniCd）が存在する場合は市区町村名を付与
             if (muniData && muniData[muniCd]) {
               const parts = muniData[muniCd].split(',');
               // parts[1]: 都道府県 (例: 東京都)
               // parts[2]: 市区町村 (例: 千代田区)
+              const prefName = parts[1] || '';
               const muniName = parts[2] || '';
 
-              // 例: "千代田区" + "霞が関三丁目" = "千代田区霞が関三丁目"
-              fullAddress = `${muniName}${lv01Nm || ''}`;
-
-              // ※ 東京都も含めたい場合は以下に切り替えてください:
-              // fullAddress = `${parts[1] || ''}${muniName}${lv01Nm || ''}`;
+              // 例: "東京都" + "千代田区" + "霞が関三丁目"
+              fullAddress = `${prefName}${muniName}${lv01Nm || ''}`;
             } else {
               fullAddress = lv01Nm || '';
             }
@@ -444,7 +439,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* ★ 住所入力欄（自動取得ボタン付き） */}
+              {/* 住所入力欄（自動取得ボタン付き） */}
               <div className="form-row">
                 <div className="input-field full-width">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
@@ -473,7 +468,7 @@ export default function App() {
                   <input
                     type="text"
                     name="address"
-                    placeholder="例: 東京都千代田区1-1-1"
+                    placeholder="例: 東京都千代田区霞が関3-1-1"
                     value={formData.address}
                     onChange={handleInputChange}
                   />
