@@ -19,15 +19,14 @@ function FileUploadArea({ files, onFilesChange, disabled }) {
     const [isCompressing, setIsCompressing] = useState(false);
     const fileInputRef = useRef(null);
 
-    // 画像ファイルを圧縮する内部関数
     const processFiles = async (inputFiles) => {
         setIsCompressing(true);
 
         const compressionOptions = {
-            maxSizeMB: 1,           // 最大1MB
-            maxWidthOrHeight: 1920, // 最大解像度 Full HD相当
+            maxSizeMB: 1,
+            maxWidthOrHeight: 1920,
             useWebWorker: true,
-            fileType: 'image/webp'  // WebP変換
+            fileType: 'image/webp'
         };
 
         const processedFiles = await Promise.all(
@@ -215,9 +214,9 @@ export default function Reports() {
     const [loading, setLoading] = useState(false);
     const [listLoading, setListLoading] = useState(false);
     const [geoLoading, setGeoLoading] = useState(false);
+    const [exportLoading, setExportLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
 
-    // メモリキャッシュ用 useRef
     const cachedMuniDataRef = useRef(null);
 
     useEffect(() => {
@@ -251,18 +250,16 @@ export default function Reports() {
     const handleSearch = (newFilters) => setFilters(newFilters);
     const handleReset = () => setFilters({});
 
+    // ------------------------------------------
+    // 添付ファイルダウンロード
+    // ------------------------------------------
     const handleDownloadAttachment = async (attachmentId) => {
         const newTab = window.open('about:blank', '_blank');
-
         try {
             const res = await api.get(`/attachments/${attachmentId}/download/`);
-
             if (res.data.download_url) {
-                if (newTab) {
-                    newTab.location.href = res.data.download_url;
-                } else {
-                    window.location.href = res.data.download_url;
-                }
+                if (newTab) newTab.location.href = res.data.download_url;
+                else window.location.href = res.data.download_url;
             } else {
                 if (newTab) newTab.close();
                 alert('ダウンロードURLの取得に失敗しました。');
@@ -271,6 +268,69 @@ export default function Reports() {
             console.error('ダウンロードURL取得エラー:', err);
             if (newTab) newTab.close();
             alert('ファイルのダウンロードに失敗しました。');
+        }
+    };
+
+    // ------------------------------------------
+    // PDF 出力 (個別報告書)
+    // ------------------------------------------
+    const handleExportPDF = async (reportId) => {
+        const newTab = window.open('about:blank', '_blank');
+        try {
+            // バックエンドからPDFのバイナリ(Blob)を受け取る場合
+            const res = await api.get(`/reports/${reportId}/export_pdf/`, {
+                responseType: 'blob'
+            });
+
+            const blob = new Blob([res.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+
+            if (newTab) {
+                newTab.location.href = url;
+            } else {
+                window.open(url, '_blank');
+            }
+        } catch (err) {
+            console.error('PDF出力エラー:', err);
+            if (newTab) newTab.close();
+            alert('PDFの出力に失敗しました。');
+        }
+    };
+
+    // ------------------------------------------
+    // CSV 出力 (一覧データ)
+    // ------------------------------------------
+    const handleExportCSV = async () => {
+        setExportLoading(true);
+        try {
+            const params = {};
+            Object.entries(filters).forEach(([key, value]) => {
+                if (value !== undefined && value !== null && value !== '') params[key] = value;
+            });
+
+            const res = await api.get('/reports/export_csv/', {
+                params,
+                responseType: 'blob'
+            });
+
+            // Blobデータからファイルダウンロード処理を実行
+            const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const dateStr = new Date().toISOString().split('T')[0];
+            link.setAttribute('download', `reports_${dateStr}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            setMessage({ type: 'success', text: 'CSVファイルをダウンロードしました。' });
+        } catch (err) {
+            console.error('CSV出力エラー:', err);
+            alert('CSVの出力に失敗しました。');
+        } finally {
+            setExportLoading(false);
         }
     };
 
@@ -306,12 +366,8 @@ export default function Reports() {
         }
     };
 
-    // 市区町村マッピングデータの取得
     const fetchMuniMap = async () => {
-        if (cachedMuniDataRef.current) {
-            return cachedMuniDataRef.current;
-        }
-
+        if (cachedMuniDataRef.current) return cachedMuniDataRef.current;
         try {
             const localData = localStorage.getItem('muni_map_cache');
             if (localData) {
@@ -329,13 +385,11 @@ export default function Reports() {
 
             const data = await response.json();
             cachedMuniDataRef.current = data;
-
             try {
                 localStorage.setItem('muni_map_cache', JSON.stringify(data));
             } catch (e) {
                 console.warn('localStorage への保存容量を超過した可能性があります:', e);
             }
-
             return data;
         } catch (error) {
             console.error('muni.json フェッチエラー:', error);
@@ -352,7 +406,6 @@ export default function Reports() {
                 try {
                     const { latitude, longitude } = position.coords;
                     const muniData = await fetchMuniMap();
-
                     let muniCd = null;
                     let lv01Nm = '';
 
@@ -378,7 +431,6 @@ export default function Reports() {
                     }
 
                     let fullAddress = '';
-
                     if (muniData && muniCd) {
                         const key = muniCd.replace(/^0+/, '');
                         const targetInfo = muniData[key] || muniData[muniCd];
@@ -387,14 +439,11 @@ export default function Reports() {
                             const parts = targetInfo.split(',');
                             const prefName = parts[1] || '';
                             const muniName = (parts[3] || '').replace(/\s+/g, '');
-
                             fullAddress = `${prefName}${muniName}${lv01Nm}`;
                         }
                     }
 
-                    if (!fullAddress && lv01Nm) {
-                        fullAddress = lv01Nm;
-                    }
+                    if (!fullAddress && lv01Nm) fullAddress = lv01Nm;
 
                     if (fullAddress) {
                         setFormData((prev) => ({ ...prev, address: fullAddress }));
@@ -417,7 +466,6 @@ export default function Reports() {
         );
     };
 
-    // フォーム送信ハンドラー (targetStatus: 'Draft' または 'Pending')
     const handleSubmit = async (targetStatus) => {
         if (!formData.report_no.trim() || !formData.reception_no.trim() || !formData.title.trim() || !formData.description.trim()) {
             alert('必須項目（報告日付、件名番号、受付番号、件名、業務内容）をすべて入力してください。');
@@ -426,21 +474,13 @@ export default function Reports() {
 
         setLoading(true);
         try {
-            // 1. 報告本体の登録
-            const payload = {
-                ...formData,
-                status: targetStatus
-            };
+            const payload = { ...formData, status: targetStatus };
             const reportRes = await api.post('/reports/', payload);
             const reportId = reportRes.data.id;
 
-            // 2. 添付ファイルがある場合は一括アップロードAPIを呼出
             if (files.length > 0) {
                 const uploadData = new FormData();
-                files.forEach((file) => {
-                    uploadData.append('files', file);
-                });
-
+                files.forEach((file) => uploadData.append('files', file));
                 await api.post(`/reports/${reportId}/bulk_upload/`, uploadData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
@@ -451,8 +491,6 @@ export default function Reports() {
                 : '業務報告を提出（承認申請）しました。';
 
             setMessage({ type: 'success', text: successMsg });
-
-            // フォームリセット
             setFormData({
                 report_no: '',
                 reception_no: '',
@@ -471,7 +509,6 @@ export default function Reports() {
         }
     };
 
-    // ステータス表示用のバッジ描画関数
     const renderStatusBadge = (status) => {
         switch (status) {
             case 'Draft':
@@ -604,7 +641,6 @@ export default function Reports() {
                             />
                         </div>
 
-                        {/* ドラッグ＆ドロップ ＋ サムネイル表示対応コンポーネント */}
                         <div className="input-field">
                             <label>添付ファイル</label>
                             <FileUploadArea
@@ -614,7 +650,6 @@ export default function Reports() {
                             />
                         </div>
 
-                        {/* 送信ボタンエリア */}
                         <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                             <button
                                 type="button"
@@ -647,8 +682,17 @@ export default function Reports() {
                 </section>
 
                 <section className="card list-section glass-panel">
-                    <div className="card-header">
+                    <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <h2>登録済み報告一覧 ({reports.length} 件)</h2>
+                        <button
+                            type="button"
+                            onClick={handleExportCSV}
+                            disabled={exportLoading || reports.length === 0}
+                            className="btn-outline"
+                            style={{ padding: '6px 12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >
+                            {exportLoading ? <Spinner size={14} /> : '📊 CSV出力'}
+                        </button>
                     </div>
                     <ReportFilterBar onSearch={handleSearch} onReset={handleReset} />
                     <div className="reports-scroll">
@@ -671,6 +715,7 @@ export default function Reports() {
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <span className="item-date">{r.date}</span>
+                                            <button type="button" onClick={() => handleExportPDF(r.id)} className="btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }}>📄 PDF</button>
                                             <button type="button" onClick={() => handleStartEdit(r)} className="btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }}>✏️ 編集</button>
                                         </div>
                                     </div>
