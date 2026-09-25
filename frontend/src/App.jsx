@@ -116,34 +116,31 @@ export default function App() {
         try {
           const { latitude, longitude } = position.coords;
 
-          // OpenStreetMap (Nominatim API) を使用する場合（番地まで取得する場合）
-          // 国土地理院APIのままにする場合は、以下のURLを元のURLに戻してください。
+          // 国土地理院 逆ジオコーディング API
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=ja`
+            `https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon=${longitude}&lat=${latitude}`
           );
 
           if (!res.ok) throw new Error('住所情報の取得に失敗しました');
 
           const data = await res.json();
+          if (data.results) {
+            // 町丁目名までの住所文字列を抽出（例: 東京都千代田区霞が関三丁目）
+            const addressText = data.results.lv01Nm || '';
 
-          // OpenStreetMap のレスポンス処理
-          if (data && data.address) {
-            const addr = data.address;
-            const state = addr.province || addr.state || '';
-            const city = addr.city || addr.ward || addr.town || addr.village || '';
-            const suburb = addr.suburb || addr.neighbourhood || addr.quarter || '';
-            const road = addr.road || '';
-            const houseNumber = addr.house_number ? `${addr.house_number}` : '';
-
-            let fullAddress = `${state}${city}${suburb}${road}${houseNumber}`.trim();
-
-            if (!fullAddress && data.display_name) {
-              fullAddress = data.display_name;
-            }
-
-            if (fullAddress) {
-              setFormData((prev) => ({ ...prev, address: fullAddress }));
+            if (addressText) {
+              setFormData((prev) => ({ ...prev, address: addressText }));
               setMessage({ type: 'success', text: '現在地から住所を自動入力しました。' });
+
+              // 入力欄に自動フォーカス＋末尾にカーソルを移動（番地の手打ちをスムーズにする）
+              setTimeout(() => {
+                const inputEl = document.querySelector('input[name="address"]');
+                if (inputEl) {
+                  inputEl.focus();
+                  const len = inputEl.value.length;
+                  inputEl.setSelectionRange(len, len);
+                }
+              }, 100);
             } else {
               alert('該当する住所情報が見つかりませんでした。');
             }
@@ -167,18 +164,18 @@ export default function App() {
             alert('位置情報が取得できませんでした。');
             break;
           case error.TIMEOUT:
-            alert('位置情報の取得がタイムアウトしました。もう一度お試しください。');
+            alert('位置情報の取得に時間がかかりすぎました。もう一度お試しください。');
             break;
           default:
             alert('位置情報の取得に失敗しました。');
             break;
         }
       },
-      // ★ ここで高速化を行っています ★
+      // ★ 30秒問題を解決する高速化オプション ★
       {
-        enableHighAccuracy: false, // 高精度GPS待機をオフにし、Wi-Fi/基地局で即座に取得
-        timeout: 5000,             // 5秒応答がなければタイムアウトにする
-        maximumAge: 60000          // 直近1分以内に端末が取得した位置情報があれば再利用する
+        enableHighAccuracy: false, // GPS衛生の精密測位待機をオフにし、Wi-Fi/基地局で即座に座標取得
+        timeout: 5000,             // 5秒で応答がなければタイムアウト処理にする
+        maximumAge: 60000          // 過去60秒以内の既存の位置情報キャッシュがあれば即座に再利用
       }
     );
   };
