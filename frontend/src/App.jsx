@@ -116,29 +116,18 @@ export default function App() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // 国土地理院の muni.js を安全に取得・解析する関数
+  // 全国版 muni.json を public フォルダから取得・キャッシュする関数
   const fetchMuniMap = async () => {
     if (gsiMuniMapRef.current) return gsiMuniMapRef.current;
     try {
-      const res = await fetch('https://mreversegeocoder.gsi.go.jp/reverse-geocoder/parameter/muni.js');
-      if (!res.ok) throw new Error('muni.js の取得に失敗しました');
+      const res = await fetch('/muni.json');
+      if (!res.ok) throw new Error('muni.json の取得に失敗しました');
 
-      const text = await res.text();
-
-      if (text.trim().startsWith('<')) {
-        throw new Error('レスポンスがHTMLです');
-      }
-
-      const jsonMatch = text.match(/GSI\.MuniData\s*=\s*(\{[\s\S]*\});?/);
-      if (!jsonMatch || !jsonMatch[1]) {
-        throw new Error('muni.js のデータ構造解析に失敗しました');
-      }
-
-      const parsedData = JSON.parse(jsonMatch[1]);
+      const parsedData = await res.json();
       gsiMuniMapRef.current = parsedData;
       return parsedData;
     } catch (e) {
-      console.error('市区町村マスターの取得に失敗しました:', e);
+      console.error('全国自治体マスターの取得に失敗しました:', e);
       return null;
     }
   };
@@ -157,7 +146,7 @@ export default function App() {
         try {
           const { latitude, longitude } = position.coords;
 
-          // API 呼び出しと自治体マスター取得を並列で実行
+          // 逆ジオコーディング API 呼び出しとローカル自治体マスター取得を並列実行
           const [res, muniData] = await Promise.all([
             fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon=${longitude}&lat=${latitude}`),
             fetchMuniMap()
@@ -170,16 +159,24 @@ export default function App() {
             const { muniCd, lv01Nm } = data.results;
             let fullAddress = '';
 
-            if (muniData && muniData[muniCd]) {
-              const parts = muniData[muniCd].split(',');
-              // parts[1]: 都道府県 (例: 東京都)
-              // parts[2]: 市区町村 (例: 千代田区)
-              const prefName = parts[1] || '';
-              const muniName = parts[2] || '';
+            if (muniData) {
+              // muniCd (例: "01101") から先頭の '0' を取り除いて "1101" のキーで検索
+              const key = muniCd ? muniCd.replace(/^0+/, '') : '';
+              const targetInfo = muniData[key] || muniData[muniCd];
 
-              // 例: "東京都" + "千代田区" + "霞が関三丁目"
-              fullAddress = `${prefName}${muniName}${lv01Nm || ''}`;
-            } else {
+              if (targetInfo) {
+                const parts = targetInfo.split(',');
+                // parts[1]: 都道府県 (例: 北海道)
+                // parts[3]: 市区町村 (例: 札幌市 中央区)
+                const prefName = parts[1] || '';
+                const muniName = (parts[3] || '').replace(/\s+/g, ''); // 全角・半角スペースの除去
+
+                // 例: "北海道" + "札幌市中央区" + "北一条西二丁目"
+                fullAddress = `${prefName}${muniName}${lv01Nm || ''}`;
+              }
+            }
+
+            if (!fullAddress) {
               fullAddress = lv01Nm || '';
             }
 
