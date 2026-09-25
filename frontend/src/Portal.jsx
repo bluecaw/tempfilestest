@@ -8,7 +8,7 @@ const PORTAL_SECTIONS = [
         links: [
             {
                 title: 'Django 管理画面 (Admin)',
-                url: 'https://your-django-backend.onrender.com/admin/',
+                url: 'https://report-django-backend.onrender.com/admin/',
                 description: '報告データ・ユーザー権限・操作ログの直接管理',
                 badge: '管理者用',
                 badgeColor: 'badge-red',
@@ -16,7 +16,7 @@ const PORTAL_SECTIONS = [
             },
             {
                 title: 'REST API 参照 (DRF Root)',
-                url: 'https://your-django-backend.onrender.com/api/',
+                url: 'https://report-django-backend.onrender.com/api/',
                 description: 'バックエンド API のエンドポイント動作確認',
                 badge: '開発者',
                 badgeColor: 'badge-blue',
@@ -92,7 +92,7 @@ const PORTAL_SECTIONS = [
             },
             {
                 title: 'GitHub リポジトリ',
-                url: 'https://github.com/your-org/your-repo',
+                url: 'https://github.com/bluecaw/tempfilestest',
                 description: 'ソースコード管理・Pull Request・Issue',
                 badge: 'Git',
                 badgeColor: 'badge-gray',
