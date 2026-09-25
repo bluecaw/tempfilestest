@@ -32,7 +32,8 @@ from .models import Report, Attachment, OperationLog, PasswordResetOTP
 from .serializers import ReportSerializer, AttachmentSerializer, AttachmentUploadSerializer
 from .s3_utils import R2Service
 from .utils import send_realtime_notification  # ★ 通知ヘルパーのインポート
-
+from .slack_utils import send_slack_interactive_notification  # ★ これを追加！
+from django.conf import settings  # ★ settingsを参照するため追加
 
 # 日本語フォント登録 (ReportLab)
 try:
@@ -117,7 +118,14 @@ class ReportViewSet(viewsets.ModelViewSet):
                     }
                 }
             )
-
+# 2. ★★★ ここを追加！ Slack通知の呼び出し ★★★
+        webhook_url = getattr(settings, 'SLACK_WEBHOOK_URL', None)
+        if webhook_url:
+            try:
+                send_slack_interactive_notification(webhook_url, report)
+            except Exception as e:
+                # Slack送信が失敗しても画面側の処理（日報作成）を止めないようログ出力のみにとどめる
+                print(f"Slack Notification Error: {e}")
     def perform_create(self, serializer):
         report = serializer.save(created_by=self.request.user)
         log_operation(

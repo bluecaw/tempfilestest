@@ -276,3 +276,6 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@example.com'
 
 # Google Maps API Key
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
+
+# Renderの環境変数（Environment Variables）から取得
+SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL', '')
