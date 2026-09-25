@@ -208,12 +208,29 @@ export default function Reports() {
     const handleSearch = (newFilters) => setFilters(newFilters);
     const handleReset = () => setFilters({});
 
+    // 修正後
     const handleDownloadAttachment = async (attachmentId) => {
+        // 1. 非同期処理の「前」に空のタブを開いておく（iOS Safari のポップアップブロック回避策）
+        const newTab = window.open('about:blank', '_blank');
+
         try {
             const res = await api.get(`/attachments/${attachmentId}/download/`);
-            if (res.data.download_url) window.open(res.data.download_url, '_blank');
+
+            if (res.data.download_url) {
+                // 2. 取得したURLへリダイレクト
+                if (newTab) {
+                    newTab.location.href = res.data.download_url;
+                } else {
+                    window.location.href = res.data.download_url;
+                }
+            } else {
+                if (newTab) newTab.close();
+                alert('ダウンロードURLの取得に失敗しました。');
+            }
         } catch (err) {
             console.error('ダウンロードURL取得エラー:', err);
+            if (newTab) newTab.close();
+            alert('ファイルのダウンロードに失敗しました。');
         }
     };
 
@@ -564,11 +581,20 @@ export default function Reports() {
                                     <div className="item-footer">
                                         <span className="item-author">👤 担当: {r.created_by?.username || r.user?.username || '未定義'}</span>
                                     </div>
+                                    {/* 修正箇所の周辺 */}
                                     {r.attachments?.length > 0 && (
                                         <div className="item-attachments">
                                             <div className="attachment-chips">
                                                 {r.attachments.map(att => (
-                                                    <button key={att.id} type="button" onClick={() => handleDownloadAttachment(att.id)} className="attachment-chip">
+                                                    <button
+                                                        key={att.id}
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation(); // 親要素へのイベント伝播を停止
+                                                            handleDownloadAttachment(att.id);
+                                                        }}
+                                                        className="attachment-chip"
+                                                    >
                                                         📎 {att.original_filename}
                                                     </button>
                                                 ))}

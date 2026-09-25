@@ -750,3 +750,11 @@ button:disabled {
 .btn-remove-file:hover {
   background: var(--error-border);
 }
+
+/* iOSでのタップ反応とボタン挙動を安定化 */
+.attachment-chip {
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  touch-action: manipulation;
+  /* その他既存のスタイル */
+}
