@@ -107,15 +107,46 @@ export default function Reports() {
         }
     };
 
+    // メモリキャッシュ用の変数（コンポーネントの外側、またはモジュールスコープに配置）
+    let cachedMuniData = null;
+
     const fetchMuniMap = async () => {
-        if (gsiMuniMapRef.current) return gsiMuniMapRef.current;
+        // 1. メモリ（変数）上にキャッシュがあれば即座に返す
+        if (cachedMuniData) {
+            return cachedMuniData;
+        }
+
+        // 2. localStorage にキャッシュが存在するか確認
         try {
-            const res = await fetch('/muni.json');
-            if (!res.ok) throw new Error('muni.json の取得に失敗しました');
-            const parsedData = await res.json();
-            gsiMuniMapRef.current = parsedData;
-            return parsedData;
+            const localData = localStorage.getItem('muni_map_cache');
+            if (localData) {
+                cachedMuniData = JSON.parse(localData);
+                return cachedMuniData;
+            }
         } catch (e) {
+            console.warn('localStorage からの取得に失敗しました:', e);
+        }
+
+        // 3. キャッシュがなければネットワークから fetch
+        try {
+            const response = await fetch('/muni.json'); // パスは環境に合わせて調整してください
+            if (!response.ok) throw new Error('muni.json の取得に失敗しました');
+
+            const data = await response.json();
+
+            // メモリに保持
+            cachedMuniData = data;
+
+            // localStorage に保存（次回以降のリロード対策）
+            try {
+                localStorage.setItem('muni_map_cache', JSON.stringify(data));
+            } catch (e) {
+                console.warn('localStorage への保存容量を超過した可能性があります:', e);
+            }
+
+            return cachedMuniData;
+        } catch (error) {
+            console.error('muni.json フェッチエラー:', error);
             return null;
         }
     };
