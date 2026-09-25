@@ -64,8 +64,16 @@ const PORTAL_SECTIONS = [
     },
     {
         category: '🛠️ 外部 API & 開発ツール',
-        description: 'APIキー・メールテスト・使用量モニター・リポジトリ',
+        description: 'APIキー・メールテスト・位置情報解析・使用量モニター・リポジトリ',
         links: [
+            {
+                title: '国土地理院 逆ジオコーディング API',
+                url: 'https://maps.gsi.go.jp/development/api.html',
+                description: '位置情報（緯度・経度）から住所テキストを無料取得するAPI仕様書',
+                badge: '位置情報 API',
+                badgeColor: 'badge-green',
+                icon: '🗺️',
+            },
             {
                 title: 'Mailtrap',
                 url: 'https://mailtrap.io/inboxes',
@@ -80,7 +88,7 @@ const PORTAL_SECTIONS = [
                 description: 'Geocoding API の利用料金・キー制限設定',
                 badge: 'GCP',
                 badgeColor: 'badge-yellow',
-                icon: '🗺️',
+                icon: '🌐',
             },
             {
                 title: 'GitHub リポジトリ',
