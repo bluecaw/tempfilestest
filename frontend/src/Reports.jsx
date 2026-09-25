@@ -129,40 +129,58 @@ export default function Reports() {
                 try {
                     const { latitude, longitude } = position.coords;
 
-                    // Django バックエンド経由で安全に国土地理院 API を呼ぶ ＆ muni.json を取得
-                    const [res, muniData] = await Promise.all([
-                        api.get(`/reverse-geocode/?lat=${latitude}&lon=${longitude}`),
-                        fetchMuniMap()
-                    ]);
+                    // 1. muni.json (ローカル) を取得
+                    const muniData = await fetchMuniMap();
 
-                    if (res.data && res.data.results) {
-                        const { muniCd, lv01Nm } = res.data.results;
-                        let fullAddress = '';
+                    let muniCd = null;
+                    let lv01Nm = '';
 
-                        // muni.json (ローカルキャッシュ) から都道府県・市区町村名を取得
-                        if (muniData) {
-                            const key = muniCd ? muniCd.replace(/^0+/, '') : '';
-                            const targetInfo = muniData[key] || muniData[muniCd];
+                    // 2. フロントエンドから国土地理院 API へ直接アクセス (タイムアウト3秒)
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-                            if (targetInfo) {
-                                const parts = targetInfo.split(',');
-                                const prefName = parts[1] || '';
-                                const muniName = (parts[3] || '').replace(/\s+/g, '');
+                        const gsiRes = await fetch(
+                            `https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon=${longitude}&lat=${latitude}`,
+                            { signal: controller.signal }
+                        );
+                        clearTimeout(timeoutId);
 
-                                fullAddress = `${prefName}${muniName}${lv01Nm || ''}`;
+                        if (gsiRes.ok) {
+                            const data = await gsiRes.json();
+                            if (data && data.results) {
+                                muniCd = data.results.muniCd;
+                                lv01Nm = data.results.lv01Nm || '';
                             }
                         }
+                    } catch (e) {
+                        console.warn('国土地理院APIからの取得に失敗またはタイムアウトしました。muni.jsonのみで解決を試みます。');
+                    }
 
-                        if (!fullAddress) {
-                            fullAddress = lv01Nm || '';
-                        }
+                    let fullAddress = '';
 
-                        if (fullAddress) {
-                            setFormData((prev) => ({ ...prev, address: fullAddress }));
-                            setMessage({ type: 'success', text: '住所を自動入力しました。' });
-                        } else {
-                            alert('該当する住所情報が見つかりませんでした。');
+                    // 3. muni.json から都道府県・市区町村名を取得
+                    if (muniData && muniCd) {
+                        const key = muniCd.replace(/^0+/, '');
+                        const targetInfo = muniData[key] || muniData[muniCd];
+
+                        if (targetInfo) {
+                            const parts = targetInfo.split(',');
+                            const prefName = parts[1] || '';
+                            const muniName = (parts[3] || '').replace(/\s+/g, '');
+
+                            fullAddress = `${prefName}${muniName}${lv01Nm}`;
                         }
+                    }
+
+                    // 4. 国土地理院APIがダメで muniCd も取れなかった場合の代替表示
+                    if (!fullAddress && lv01Nm) {
+                        fullAddress = lv01Nm;
+                    }
+
+                    if (fullAddress) {
+                        setFormData((prev) => ({ ...prev, address: fullAddress }));
+                        setMessage({ type: 'success', text: '住所を自動入力しました。' });
                     } else {
                         alert('住所情報の取得に失敗しました。手動で入力してください。');
                     }
