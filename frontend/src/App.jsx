@@ -114,22 +114,31 @@ export default function App() {
   };
 
   // ★ 現在地（GPS）から住所を自動取得する処理（完全無料：国土地理院 API）
-  // 国土地理院の市区町村コード（muniCd）を市区町村名に変換する辞書データキャッシュ
-  let gsiMuniMap = null;
-
+  // 国土地理院の muni.js を安全にパースする処理
   const fetchMuniMap = async () => {
     if (gsiMuniMap) return gsiMuniMap;
     try {
-      // 国土地理院公式の自治体コードマスターを取得
       const res = await fetch('https://mreversegeocoder.gsi.go.jp/reverse-geocoder/parameter/muni.js');
+      if (!res.ok) throw new Error('muni.js の取得に失敗しました');
+
       const text = await res.text();
-      // GSI.MuniData = { ... } というJavaScriptファイルをオブジェクト化
-      const jsonText = text.replace(/^GSI\.MuniData\s*=\s*/, '').replace(/;?\s*$/, '');
-      gsiMuniMap = JSON.parse(jsonText);
+
+      // HTMLが返ってきていないかチェック (<!DOCTYPE など)
+      if (text.trim().startsWith('<')) {
+        throw new Error('レスポンスがHTMLです。URLまたはネットワークを確認してください。');
+      }
+
+      // GSI.MuniData = { ... }; のレスポンスから JSON 部分だけを抽出
+      const jsonMatch = text.match(/GSI\.MuniData\s*=\s*(\{[\s\S]*\});?/);
+      if (!jsonMatch || !jsonMatch[1]) {
+        throw new Error('muni.js のデータ構造の抽出に失敗しました');
+      }
+
+      gsiMuniMap = JSON.parse(jsonMatch[1]);
       return gsiMuniMap;
     } catch (e) {
       console.error('市区町村マスターの取得に失敗しました:', e);
-      return {};
+      return null; // エラー時は null を返す
     }
   };
 
@@ -146,7 +155,7 @@ export default function App() {
         try {
           const { latitude, longitude } = position.coords;
 
-          // 国土地理院 逆ジオコーディング API & 市区町村マスターを並行取得
+          // 国土地理院 逆ジオコーディング API & 市区町村マスターを取得
           const [res, muniData] = await Promise.all([
             fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon=${longitude}&lat=${latitude}`),
             fetchMuniMap()
@@ -157,18 +166,20 @@ export default function App() {
           const data = await res.json();
           if (data.results) {
             const { muniCd, lv01Nm } = data.results;
-
-            // muniCd から 都道府県・市区町村名 を特定 (例: "13101" -> "東京都,千代田区")
-            const muniInfo = muniData[muniCd];
             let fullAddress = '';
 
-            if (muniInfo) {
-              const [, prefAndMuni] = muniInfo.split(','); // "13101,東京都,千代田区..." などの形式
-              // 東京都も含める場合: `${muniInfo.split(',')[1]}${muniInfo.split(',')[2]}${lv01Nm || ''}`
-              // 「千代田区霞が関三丁目」のように市区町村名から繋げる場合:
-              const muniName = muniInfo.split(',')[2] || '';
-              fullAddress = `${muniName}${lv01Nm || ''}`;
+            // muniData が取得できている場合は組み合わせる
+            if (muniData && muniData[muniCd]) {
+              const parts = muniData[muniCd].split(',');
+              // parts[1]: 都道府県 (例: 東京都)
+              // parts[2]: 市区町村 (例: 千代田区)
+              const muniName = parts[2] || '';
+              fullAddress = `${muniName}${lv01Nm || ''}`; // 千代田区霞が関三丁目
+
+              // ※ 都道府県も付けたい場合はこちら:
+              // fullAddress = `${parts[1] || ''}${muniName}${lv01Nm || ''}`;
             } else {
+              // フォールバック: マスター取得失敗時は町丁目名のみ
               fullAddress = lv01Nm || '';
             }
 
@@ -176,7 +187,6 @@ export default function App() {
               setFormData((prev) => ({ ...prev, address: fullAddress }));
               setMessage({ type: 'success', text: '現在地から住所を自動入力しました。' });
 
-              // 入力欄に自動フォーカス＋末尾にカーソルを移動
               setTimeout(() => {
                 const inputEl = document.querySelector('input[name="address"]');
                 if (inputEl) {
