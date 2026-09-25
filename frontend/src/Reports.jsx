@@ -282,7 +282,23 @@ export default function Reports() {
                                     </div>
                                 </div>
                                 <h3 className="item-title">{r.title}</h3>
-                                {r.address && <p className="item-address">📍 {r.address}</p>}
+                                {r.address && (
+                                    <p className="item-address">
+                                        📍{' '}
+                                        <a
+                                            href={
+                                                r.latitude && r.longitude
+                                                    ? `https://www.google.com/maps?q=${r.latitude},${r.longitude}`
+                                                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}`
+                                            }
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{ color: '#60a5fa', textDecoration: 'underline', cursor: 'pointer' }}
+                                        >
+                                            {r.address}
+                                        </a>
+                                    </p>
+                                )}
                                 <p className="item-desc">{r.description}</p>
                                 <div className="item-footer">
                                     <span className="item-author">👤 担当: {r.created_by?.username || r.user?.username || '未定義'}</span>
