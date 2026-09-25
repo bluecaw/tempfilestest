@@ -30,7 +30,19 @@ export default function App() {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false); // ★ 位置情報取得中のローディング状態
-  const [message, setMessage] = useState({ type: '', text: '' });
+  const [message, setMessage] = useState(null); // または useState('')
+
+  // ★ メッセージがセットされたら 5 秒後に自動消去するタイマー
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => {
+        setMessage(null); // 5秒後にメッセージを閉じる
+      }, 5000);
+
+      // クリーンアップ処理（連続でメッセージが出た場合にタイマーをリセット）
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   // JWT ログイン処理
   const handleLogin = async (e) => {

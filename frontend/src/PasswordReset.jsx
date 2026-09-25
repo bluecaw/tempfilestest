@@ -13,7 +13,19 @@ export default function PasswordReset({ onBackToLogin }) {
 
     // UI状態
     const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState('');
+    const [message, setMessage] = useState(null); // または useState('')
+
+    // ★ メッセージがセットされたら 5 秒後に自動消去するタイマー
+    useEffect(() => {
+        if (message) {
+            const timer = setTimeout(() => {
+                setMessage(null); // 5秒後にメッセージを閉じる
+            }, 5000);
+
+            // クリーンアップ処理（連続でメッセージが出た場合にタイマーをリセット）
+            return () => clearTimeout(timer);
+        }
+    }, [message]);
     const [error, setError] = useState('');
 
     // Step 1: 認証コード発行リクエスト
