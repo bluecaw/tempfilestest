@@ -213,52 +213,104 @@ export default function Reports() {
                                     }}
                                     dateFormat="yyyy/MM/dd"
                                     locale="ja"
+                                    placeholderText="年/月/日"
                                     required
                                 />
                             </div>
                             <div className="input-field">
                                 <label>件名番号 *</label>
-                                <input type="text" name="report_no" value={formData.report_no} onChange={handleInputChange} required />
+                                <input
+                                    type="text"
+                                    name="report_no"
+                                    placeholder="例: 0001"
+                                    value={formData.report_no}
+                                    onChange={handleInputChange}
+                                    required
+                                />
                             </div>
                             <div className="input-field">
                                 <label>受付番号 *</label>
-                                <input type="text" name="reception_no" value={formData.reception_no} onChange={handleInputChange} required />
+                                <input
+                                    type="text"
+                                    name="reception_no"
+                                    placeholder="例: REC-2026-001"
+                                    value={formData.reception_no}
+                                    onChange={handleInputChange}
+                                    required
+                                />
                             </div>
                         </div>
+
                         <div className="form-row">
                             <div className="input-field full-width">
                                 <label>件名 *</label>
-                                <input type="text" name="title" value={formData.title} onChange={handleInputChange} required />
+                                <input
+                                    type="text"
+                                    name="title"
+                                    placeholder="例: ○○地区 定期点検作業報告"
+                                    value={formData.title}
+                                    onChange={handleInputChange}
+                                    required
+                                />
                             </div>
                         </div>
+
                         <div className="form-row">
                             <div className="input-field full-width">
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                                     <label style={{ margin: 0 }}>住所</label>
-                                    <button type="button" onClick={handleGetLocation} disabled={geoLoading} className="btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={handleGetLocation}
+                                        disabled={geoLoading}
+                                        className="btn-outline"
+                                        style={{ padding: '2px 8px', fontSize: '12px' }}
+                                    >
                                         {geoLoading ? '📍 取得中...' : '📍 現在地から自動入力'}
                                     </button>
                                 </div>
-                                <input type="text" name="address" value={formData.address} onChange={handleInputChange} />
+                                <input
+                                    type="text"
+                                    name="address"
+                                    placeholder="例: 東京都千代田区霞が関3-1-1"
+                                    value={formData.address}
+                                    onChange={handleInputChange}
+                                />
                             </div>
                         </div>
+
                         <div className="input-field">
                             <label>業務内容詳細 *</label>
-                            <textarea name="description" rows="4" value={formData.description} onChange={handleInputChange} required></textarea>
+                            <textarea
+                                name="description"
+                                rows="4"
+                                placeholder="具体的な作業内容、進捗、特記事項を入力してください..."
+                                value={formData.description}
+                                onChange={handleInputChange}
+                                required
+                            />
                         </div>
+
                         <div className="file-upload-area">
                             <label className="file-label">
                                 <span className="upload-icon">📎</span>
                                 <div>
                                     <strong>添付ファイルを選択 (複数可)</strong>
-                                    <p>最大50MB/ファイル</p>
+                                    <p>写真 (JPG/PNG), PDF, Excel (XLSX), Word, ZIP 等 (最大50MB/ファイル)</p>
                                 </div>
                                 <input type="file" multiple onChange={handleFileChange} className="hidden-file-input" />
                             </label>
-                            {files.length > 0 && <ul className="selected-files-list">{files.map((f, i) => <li key={i}>📄 {f.name}</li>)}</ul>}
+                            {files.length > 0 && (
+                                <ul className="selected-files-list">
+                                    {files.map((f, i) => (
+                                        <li key={i}>📄 {f.name} ({(f.size / 1024).toFixed(1)} KB)</li>
+                                    ))}
+                                </ul>
+                            )}
                         </div>
+
                         <button type="submit" disabled={loading} className="btn-glow submit-btn">
-                            {loading ? '保存中...' : '業務報告を送信・登録'}
+                            {loading ? '保存・R2へファイル送信中...' : '業務報告を送信・登録'}
                         </button>
                     </form>
                 </section>
