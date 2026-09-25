@@ -4,6 +4,11 @@ import PasswordReset from './PasswordReset';
 import { NotificationBell } from './NotificationBell';
 import { ReportFilterBar } from './ReportFilterBar';
 import Portal from './Portal'; // ★ 1. Portal コンポーネントをインポート
+import DatePicker, { registerLocale } from 'react-datepicker';
+import { ja } from 'date-fns/locale/ja';
+import 'react-datepicker/dist/react-datepicker.css';
+
+registerLocale('ja', ja);
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('jwt_token') || '');
@@ -262,7 +267,31 @@ export default function App() {
               <div className="form-row">
                 <div className="input-field">
                   <label>報告日付 *</label>
-                  <input type="date" name="date" value={formData.date} onChange={handleInputChange} required />
+                  <DatePicker
+                    selected={formData.date ? new Date(formData.date.replace(/-/g, '/')) : null}
+                    onChange={(date) => {
+                      if (!date) {
+                        handleInputChange({ target: { name: 'date', value: '' } });
+                        return;
+                      }
+                      // YYYY-MM-DD 形式の文字列に変換して既存の formData にセット
+                      const year = date.getFullYear();
+                      const month = String(date.getMonth() + 1).padStart(2, '0');
+                      const day = String(date.getDate()).padStart(2, '0');
+                      const formattedDate = `${year}-${month}-${day}`;
+
+                      handleInputChange({
+                        target: {
+                          name: 'date',
+                          value: formattedDate
+                        }
+                      });
+                    }}
+                    dateFormat="yyyy/MM/dd"
+                    locale="ja"
+                    placeholderText="年/月/日"
+                    required
+                  />
                 </div>
                 <div className="input-field">
                   <label>件名番号 *</label>
