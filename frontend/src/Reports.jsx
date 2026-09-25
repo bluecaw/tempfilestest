@@ -9,6 +9,141 @@ import Spinner from './Spinner';
 
 registerLocale('ja', ja);
 
+// ==========================================
+// ドラッグ＆ドロップ ＆ プレビュー表示用コンポーネント
+// ==========================================
+function FileUploadArea({ files, onFilesChange }) {
+    const [isDragOver, setIsDragOver] = useState(false);
+    const [previews, setPreviews] = useState([]);
+    const fileInputRef = useRef(null);
+
+    // ファイル選択変更時に Blob URL を生成し、アンマウント・変更時にメモリ解放
+    useEffect(() => {
+        const newPreviews = files.map((file) => {
+            if (file.type && file.type.startsWith('image/')) {
+                return {
+                    file,
+                    url: URL.createObjectURL(file),
+                    isImage: true,
+                };
+            }
+            return { file, url: null, isImage: false };
+        });
+
+        setPreviews(newPreviews);
+
+        return () => {
+            newPreviews.forEach((item) => {
+                if (item.url) URL.revokeObjectURL(item.url);
+            });
+        };
+    }, [files]);
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(true);
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const droppedFiles = Array.from(e.dataTransfer.files);
+            onFilesChange([...files, ...droppedFiles]);
+            e.dataTransfer.clearData();
+        }
+    };
+
+    const handleFileSelect = (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const selectedFiles = Array.from(e.target.files);
+            onFilesChange([...files, ...selectedFiles]);
+            e.target.value = ''; // 同じファイルの再選択を許可
+        }
+    };
+
+    const handleRemoveFile = (indexToRemove) => {
+        const updated = files.filter((_, index) => index !== indexToRemove);
+        onFilesChange(updated);
+    };
+
+    return (
+        <div className="file-upload-wrapper">
+            <div
+                className={`file-upload-area ${isDragOver ? 'drag-over' : ''}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+            >
+                <input
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/gif,application/pdf,.xlsx,.docx,.zip"
+                    ref={fileInputRef}
+                    className="hidden-file-input"
+                    onChange={handleFileSelect}
+                />
+                <div className="file-label">
+                    <span className="upload-icon">📎</span>
+                    <div>
+                        <strong>ファイルをドラッグ＆ドロップ</strong>
+                        <p>またはクリックして選択 (写真, PDF, Excel, Word, ZIP 等 / 最大50MB)</p>
+                    </div>
+                </div>
+            </div>
+
+            {previews.length > 0 && (
+                <div className="preview-grid">
+                    {previews.map((item, index) => (
+                        <div key={`${item.file.name}-${index}`} className="preview-card">
+                            {item.isImage ? (
+                                <img
+                                    src={item.url}
+                                    alt={item.file.name}
+                                    className="preview-thumbnail"
+                                    loading="lazy"
+                                />
+                            ) : (
+                                <div className="preview-file-icon">📄</div>
+                            )}
+                            <div className="preview-info">
+                                <span className="preview-filename">{item.file.name}</span>
+                                <span className="preview-filesize">
+                                    {(item.file.size / (1024 * 1024)).toFixed(2)} MB
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn-remove-file"
+                                title="削除"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveFile(index);
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ==========================================
+// メインコンポーネント
+// ==========================================
 export default function Reports() {
     const token = localStorage.getItem('jwt_token');
     const [reports, setReports] = useState([]);
@@ -84,7 +219,6 @@ export default function Reports() {
 
     const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
     const handleEditInputChange = (e) => setEditFormData({ ...editFormData, [e.target.name]: e.target.value });
-    const handleFileChange = (e) => setFiles(Array.from(e.target.files));
 
     const handleStartEdit = (report) => {
         setEditingReport(report);
@@ -359,22 +493,13 @@ export default function Reports() {
                             />
                         </div>
 
-                        <div className="file-upload-area">
-                            <label className="file-label">
-                                <span className="upload-icon">📎</span>
-                                <div>
-                                    <strong>添付ファイルを選択 (複数可)</strong>
-                                    <p>写真 (JPG/PNG), PDF, Excel (XLSX), Word, ZIP 等 (最大50MB/ファイル)</p>
-                                </div>
-                                <input type="file" multiple onChange={handleFileChange} className="hidden-file-input" />
-                            </label>
-                            {files.length > 0 && (
-                                <ul className="selected-files-list">
-                                    {files.map((f, i) => (
-                                        <li key={i}>📄 {f.name} ({(f.size / 1024).toFixed(1)} KB)</li>
-                                    ))}
-                                </ul>
-                            )}
+                        {/* ドラッグ＆ドロップ ＋ サムネイル表示対応コンポーネント */}
+                        <div className="input-field">
+                            <label>添付ファイル</label>
+                            <FileUploadArea
+                                files={files}
+                                onFilesChange={setFiles}
+                            />
                         </div>
 
                         <button type="submit" disabled={loading} className="btn-glow submit-btn" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>

@@ -649,3 +649,104 @@ button:disabled {
     /* 動きを緩やかに */
   }
 }
+
+/* ----------------------------------
+   ドラッグ＆ドロップ & プレビュー表示
+---------------------------------- */
+
+/* ドラッグエリアのカーソルと変化 */
+.file-upload-area {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* ファイルをドラッグして重ねた時のスタイル */
+.file-upload-area.drag-over {
+  border-color: var(--accent-primary);
+  background: rgba(99, 102, 241, 0.15);
+  transform: scale(1.01);
+}
+
+/* プレビュー画像／ファイルのグリッド配置 */
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* プレビューカード */
+.preview-card {
+  position: relative;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* サムネイル画像（メモリ・描画負荷を最小限に制限） */
+.preview-thumbnail {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+/* PDFなどの非画像用アイコン */
+.preview-file-icon {
+  font-size: 2.2rem;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ファイル名とサイズ情報 */
+.preview-info {
+  width: 100%;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+  overflow: hidden;
+}
+
+.preview-filename {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+}
+
+.preview-filesize {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+/* 削除ボタン (右上 ✕ ボタン) */
+.btn-remove-file {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.btn-remove-file:hover {
+  background: var(--error-border);
+}
