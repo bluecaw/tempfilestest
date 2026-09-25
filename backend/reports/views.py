@@ -571,3 +571,77 @@ class TestNotificationView(APIView):
         return Response({
             "detail": f"ユーザーID: {request.user.id} 宛てにリアルタイム通知を送信しました。"
         }, status=status.HTTP_200_OK)
+
+
+class SlackActionWebhookView(APIView):
+    """
+    Slackのボタン操作（Interactivity）を受け取る公開エンドポイント
+    """
+    permission_classes = [AllowAny]  # SlackからのWebhookを受け取るため認証を解除
+
+    def post(self, request, *args, **kwargs):
+        # Slackからのペイロードは `payload` パラメータにフォームデータ形式で届く
+        payload_raw = request.POST.get('payload')
+        if not payload_raw:
+            return HttpResponse("No payload", status=400)
+
+        payload = json.loads(payload_raw)
+
+        # アクション情報の取得
+        actions = payload.get('actions', [])
+        if not actions:
+            return HttpResponse(status=200)
+
+        action = actions[0]
+        action_id = action.get('action_id')  # 'approve_report' または 'reject_report'
+        report_id = action.get('value')      # ボタンに埋め込んだ Report ID
+        user_info = payload.get('user', {})
+        slack_username = user_info.get('username', 'Slackユーザー')
+
+        try:
+            report = Report.objects.get(id=report_id)
+        except Report.DoesNotExist:
+            return JsonResponse({"text": "⚠️ 対象の報告書が見つかりませんでした。"}, status=200)
+
+        # ステータス変更ロジック
+        if action_id == 'approve_report':
+            report.status = Report.Status.APPROVED
+            report.save()
+            status_text = "✅ 承認されました"
+            
+            # WebSocketリアルタイム通知
+            send_realtime_notification(
+                user_id=report.created_by.id,
+                notification_type="REPORT_APPROVED",
+                message=f"Slack経由で日報「{report.title}」が承認されました。（操作者: {slack_username}）",
+                report_id=report.id
+            )
+
+        elif action_id == 'reject_report':
+            report.status = Report.Status.REJECTED
+            report.save()
+            status_text = "❌ 差し戻されました"
+
+            send_realtime_notification(
+                user_id=report.created_by.id,
+                notification_type="REPORT_REMANDED",
+                message=f"Slack経由で日報「{report.title}」が差し戻されました。（操作者: {slack_username}）",
+                report_id=report.id
+            )
+
+        # Slackの元メッセージを書き換えるレスポンス（ボタンを消して完了ステータスを表示）
+        updated_blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*{status_text}* (操作者: @{slack_username})\n*件名:* {report.title}\n*提出者:* {report.created_by.username if report.created_by else '未設定'}"
+                }
+            }
+        ]
+
+        # Slackメッセージを書き換えるデータを返却
+        return JsonResponse({
+            "replace_original": True,  # 元のメッセージを置き換えるフラグ
+            "blocks": updated_blocks
+        })
