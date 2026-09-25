@@ -620,3 +620,24 @@ button:disabled {
     transform: rotate(360deg);
   }
 }
+
+/* src/index.css または該当のCSSファイルに追加 */
+
+/* スピナーを回転させるキーフレームアニメーション */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* スピナーアイコン適用用の共通クラス */
+.spinner-icon {
+  animation: spin 1s linear infinite;
+  /* 1秒で1回転、無限ループ */
+  display: inline-block;
+  vertical-align: middle;
+}

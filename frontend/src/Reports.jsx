@@ -5,6 +5,7 @@ import { ReportFilterBar } from './ReportFilterBar';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
 import 'react-datepicker/dist/react-datepicker.css';
+import Spinner from './Spinner';
 
 registerLocale('ja', ja);
 
@@ -34,6 +35,7 @@ export default function Reports() {
 
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [listLoading, setListLoading] = useState(false);
     const [geoLoading, setGeoLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
 
@@ -49,6 +51,7 @@ export default function Reports() {
 
     const fetchReports = useCallback(async (currentFilters = filters) => {
         if (!token) return;
+        setListLoading(true);
         try {
             const params = {};
             Object.entries(currentFilters).forEach(([key, value]) => {
@@ -58,6 +61,8 @@ export default function Reports() {
             setReports(Array.isArray(res.data) ? res.data : res.data.results || []);
         } catch (err) {
             console.error('報告一覧の取得に失敗しました:', err);
+        } finally {
+            setListLoading(false);
         }
     }, [token, filters]);
 
@@ -109,14 +114,12 @@ export default function Reports() {
         }
     };
 
-    // 市区町村マッピングデータの取得（リファクタリング済み）
+    // 市区町村マッピングデータの取得
     const fetchMuniMap = async () => {
-        // 1. メモリ（useRef）上にキャッシュがあれば即座に返す
         if (cachedMuniDataRef.current) {
             return cachedMuniDataRef.current;
         }
 
-        // 2. localStorage にキャッシュが存在するか確認
         try {
             const localData = localStorage.getItem('muni_map_cache');
             if (localData) {
@@ -128,17 +131,13 @@ export default function Reports() {
             console.warn('localStorage からの取得に失敗しました:', e);
         }
 
-        // 3. キャッシュがなければネットワークから fetch
         try {
             const response = await fetch('/muni.json');
             if (!response.ok) throw new Error('muni.json の取得に失敗しました');
 
             const data = await response.json();
-
-            // メモリ（useRef）に保持
             cachedMuniDataRef.current = data;
 
-            // localStorage に保存
             try {
                 localStorage.setItem('muni_map_cache', JSON.stringify(data));
             } catch (e) {
@@ -160,14 +159,11 @@ export default function Reports() {
             async (position) => {
                 try {
                     const { latitude, longitude } = position.coords;
-
-                    // 1. muni.json (ローカル) を取得
                     const muniData = await fetchMuniMap();
 
                     let muniCd = null;
                     let lv01Nm = '';
 
-                    // 2. 国土地理院 API 呼び出し (タイムアウト3秒)
                     try {
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 3000);
@@ -191,7 +187,6 @@ export default function Reports() {
 
                     let fullAddress = '';
 
-                    // 3. muni.json から都道府県・市区町村名を取得
                     if (muniData && muniCd) {
                         const key = muniCd.replace(/^0+/, '');
                         const targetInfo = muniData[key] || muniData[muniCd];
@@ -205,7 +200,6 @@ export default function Reports() {
                         }
                     }
 
-                    // 4. 代替表示
                     if (!fullAddress && lv01Nm) {
                         fullAddress = lv01Nm;
                     }
@@ -331,9 +325,16 @@ export default function Reports() {
                                         onClick={handleGetLocation}
                                         disabled={geoLoading}
                                         className="btn-outline"
-                                        style={{ padding: '2px 8px', fontSize: '12px' }}
+                                        style={{ padding: '2px 8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}
                                     >
-                                        {geoLoading ? '📍 取得中...' : '📍 現在地から自動入力'}
+                                        {geoLoading ? (
+                                            <>
+                                                <Spinner size={14} />
+                                                <span>位置情報取得中...</span>
+                                            </>
+                                        ) : (
+                                            '📍 現在地から自動入力'
+                                        )}
                                     </button>
                                 </div>
                                 <input
@@ -376,8 +377,15 @@ export default function Reports() {
                             )}
                         </div>
 
-                        <button type="submit" disabled={loading} className="btn-glow submit-btn">
-                            {loading ? '保存・R2へファイル送信中...' : '業務報告を送信・登録'}
+                        <button type="submit" disabled={loading} className="btn-glow submit-btn" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                            {loading ? (
+                                <>
+                                    <Spinner size={18} />
+                                    <span>保存・R2へファイル送信中...</span>
+                                </>
+                            ) : (
+                                '業務報告を送信・登録'
+                            )}
                         </button>
                     </form>
                 </section>
@@ -388,53 +396,63 @@ export default function Reports() {
                     </div>
                     <ReportFilterBar onSearch={handleSearch} onReset={handleReset} />
                     <div className="reports-scroll">
-                        {reports.map(r => (
-                            <div key={r.id} className="report-card-item">
-                                <div className="item-top">
-                                    <div className="tags">
-                                        <span className="tag-no">No. {r.report_no}</span>
-                                        <span className="tag-rec">受付: {r.reception_no}</span>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span className="item-date">{r.date}</span>
-                                        <button type="button" onClick={() => handleStartEdit(r)} className="btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }}>✏️ 編集</button>
-                                    </div>
-                                </div>
-                                <h3 className="item-title">{r.title}</h3>
-                                {r.address && (
-                                    <p className="item-address">
-                                        📍{' '}
-                                        <a
-                                            href={
-                                                r.latitude && r.longitude
-                                                    ? `https://www.google.com/maps?q=${r.latitude},${r.longitude}`
-                                                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}`
-                                            }
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            style={{ color: '#60a5fa', textDecoration: 'underline', cursor: 'pointer' }}
-                                        >
-                                            {r.address}
-                                        </a>
-                                    </p>
-                                )}
-                                <p className="item-desc">{r.description}</p>
-                                <div className="item-footer">
-                                    <span className="item-author">👤 担当: {r.created_by?.username || r.user?.username || '未定義'}</span>
-                                </div>
-                                {r.attachments?.length > 0 && (
-                                    <div className="item-attachments">
-                                        <div className="attachment-chips">
-                                            {r.attachments.map(att => (
-                                                <button key={att.id} type="button" onClick={() => handleDownloadAttachment(att.id)} className="attachment-chip">
-                                                    📎 {att.original_filename}
-                                                </button>
-                                            ))}
+                        {listLoading ? (
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '40px' }}>
+                                <Spinner size={32} />
+                            </div>
+                        ) : reports.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
+                                該当する報告データがありません。
+                            </div>
+                        ) : (
+                            reports.map(r => (
+                                <div key={r.id} className="report-card-item">
+                                    <div className="item-top">
+                                        <div className="tags">
+                                            <span className="tag-no">No. {r.report_no}</span>
+                                            <span className="tag-rec">受付: {r.reception_no}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span className="item-date">{r.date}</span>
+                                            <button type="button" onClick={() => handleStartEdit(r)} className="btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }}>✏️ 編集</button>
                                         </div>
                                     </div>
-                                )}
-                            </div>
-                        ))}
+                                    <h3 className="item-title">{r.title}</h3>
+                                    {r.address && (
+                                        <p className="item-address">
+                                            📍{' '}
+                                            <a
+                                                href={
+                                                    r.latitude && r.longitude
+                                                        ? `https://www.google.com/maps?q=${r.latitude},${r.longitude}`
+                                                        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}`
+                                                }
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{ color: '#60a5fa', textDecoration: 'underline', cursor: 'pointer' }}
+                                            >
+                                                {r.address}
+                                            </a>
+                                        </p>
+                                    )}
+                                    <p className="item-desc">{r.description}</p>
+                                    <div className="item-footer">
+                                        <span className="item-author">👤 担当: {r.created_by?.username || r.user?.username || '未定義'}</span>
+                                    </div>
+                                    {r.attachments?.length > 0 && (
+                                        <div className="item-attachments">
+                                            <div className="attachment-chips">
+                                                {r.attachments.map(att => (
+                                                    <button key={att.id} type="button" onClick={() => handleDownloadAttachment(att.id)} className="attachment-chip">
+                                                        📎 {att.original_filename}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))
+                        )}
                     </div>
                 </section>
             </main>
@@ -458,7 +476,16 @@ export default function Reports() {
                             <div className="input-field"><label>詳細 *</label><textarea name="description" rows="4" value={editFormData.description} onChange={handleEditInputChange} required /></div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
                                 <button type="button" onClick={() => setEditingReport(null)} className="btn-outline">キャンセル</button>
-                                <button type="submit" disabled={editLoading} className="btn-glow">{editLoading ? '更新中...' : '保存'}</button>
+                                <button type="submit" disabled={editLoading} className="btn-glow" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {editLoading ? (
+                                        <>
+                                            <Spinner size={14} />
+                                            <span>更新中...</span>
+                                        </>
+                                    ) : (
+                                        '保存'
+                                    )}
+                                </button>
                             </div>
                         </form>
                     </div>
