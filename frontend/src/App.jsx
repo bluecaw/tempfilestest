@@ -30,16 +30,15 @@ export default function App() {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false); // ★ 位置情報取得中のローディング状態
-  const [message, setMessage] = useState(null); // または useState('')
+  const [message, setMessage] = useState({ type: '', text: '' });
 
-  // ★ メッセージがセットされたら 5 秒後に自動消去するタイマー
+  // ★ メッセージが表示されたら 5 秒後に自動で消去するタイマー
   useEffect(() => {
-    if (message) {
+    if (message.text) {
       const timer = setTimeout(() => {
-        setMessage(null); // 5秒後にメッセージを閉じる
+        setMessage({ type: '', text: '' });
       }, 5000);
 
-      // クリーンアップ処理（連続でメッセージが出た場合にタイマーをリセット）
       return () => clearTimeout(timer);
     }
   }, [message]);

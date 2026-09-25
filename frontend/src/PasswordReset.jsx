@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from './api'; // 既存の api インスタンスをインポート
 
 export default function PasswordReset({ onBackToLogin }) {
@@ -13,20 +13,28 @@ export default function PasswordReset({ onBackToLogin }) {
 
     // UI状態
     const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState(null); // または useState('')
+    const [message, setMessage] = useState('');
+    const [error, setError] = useState('');
 
-    // ★ メッセージがセットされたら 5 秒後に自動消去するタイマー
+    // ★ 成功メッセージ（message）がセットされたら 5 秒後に自動消去するタイマー
     useEffect(() => {
         if (message) {
             const timer = setTimeout(() => {
-                setMessage(null); // 5秒後にメッセージを閉じる
+                setMessage('');
             }, 5000);
-
-            // クリーンアップ処理（連続でメッセージが出た場合にタイマーをリセット）
             return () => clearTimeout(timer);
         }
     }, [message]);
-    const [error, setError] = useState('');
+
+    // ★ エラーメッセージ（error）も 5 秒後に自動消去したい場合（不要であれば削除可）
+    useEffect(() => {
+        if (error) {
+            const timer = setTimeout(() => {
+                setError('');
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [error]);
 
     // Step 1: 認証コード発行リクエスト
     const handleRequestOtp = async (e) => {
