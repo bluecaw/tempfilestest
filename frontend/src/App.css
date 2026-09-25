@@ -590,3 +590,33 @@ body {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* 送信ボタンの非活性状態スタイル */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* スピナーとテキストの横並び */
+.spinner-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 簡易ローディングスピナー */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

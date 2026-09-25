@@ -36,7 +36,9 @@ export default function Reports() {
     const [loading, setLoading] = useState(false);
     const [geoLoading, setGeoLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
-    const gsiMuniMapRef = useRef(null);
+
+    // メモリキャッシュ用 useRef (レンダリング間で保持)
+    const cachedMuniDataRef = useRef(null);
 
     useEffect(() => {
         if (message.text) {
@@ -107,21 +109,20 @@ export default function Reports() {
         }
     };
 
-    // メモリキャッシュ用の変数（コンポーネントの外側、またはモジュールスコープに配置）
-    let cachedMuniData = null;
-
+    // 市区町村マッピングデータの取得（リファクタリング済み）
     const fetchMuniMap = async () => {
-        // 1. メモリ（変数）上にキャッシュがあれば即座に返す
-        if (cachedMuniData) {
-            return cachedMuniData;
+        // 1. メモリ（useRef）上にキャッシュがあれば即座に返す
+        if (cachedMuniDataRef.current) {
+            return cachedMuniDataRef.current;
         }
 
         // 2. localStorage にキャッシュが存在するか確認
         try {
             const localData = localStorage.getItem('muni_map_cache');
             if (localData) {
-                cachedMuniData = JSON.parse(localData);
-                return cachedMuniData;
+                const parsed = JSON.parse(localData);
+                cachedMuniDataRef.current = parsed;
+                return parsed;
             }
         } catch (e) {
             console.warn('localStorage からの取得に失敗しました:', e);
@@ -129,22 +130,22 @@ export default function Reports() {
 
         // 3. キャッシュがなければネットワークから fetch
         try {
-            const response = await fetch('/muni.json'); // パスは環境に合わせて調整してください
+            const response = await fetch('/muni.json');
             if (!response.ok) throw new Error('muni.json の取得に失敗しました');
 
             const data = await response.json();
 
-            // メモリに保持
-            cachedMuniData = data;
+            // メモリ（useRef）に保持
+            cachedMuniDataRef.current = data;
 
-            // localStorage に保存（次回以降のリロード対策）
+            // localStorage に保存
             try {
                 localStorage.setItem('muni_map_cache', JSON.stringify(data));
             } catch (e) {
                 console.warn('localStorage への保存容量を超過した可能性があります:', e);
             }
 
-            return cachedMuniData;
+            return data;
         } catch (error) {
             console.error('muni.json フェッチエラー:', error);
             return null;
@@ -166,7 +167,7 @@ export default function Reports() {
                     let muniCd = null;
                     let lv01Nm = '';
 
-                    // 2. フロントエンドから国土地理院 API へ直接アクセス (タイムアウト3秒)
+                    // 2. 国土地理院 API 呼び出し (タイムアウト3秒)
                     try {
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 3000);
@@ -204,7 +205,7 @@ export default function Reports() {
                         }
                     }
 
-                    // 4. 国土地理院APIがダメで muniCd も取れなかった場合の代替表示
+                    // 4. 代替表示
                     if (!fullAddress && lv01Nm) {
                         fullAddress = lv01Nm;
                     }
