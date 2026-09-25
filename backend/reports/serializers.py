@@ -1,3 +1,5 @@
+# backend/reports/serializers.py
+
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Report, Attachment
@@ -32,17 +34,14 @@ class AttachmentSerializer(serializers.ModelSerializer):
 
 
 class ReportSerializer(serializers.ModelSerializer):
+    # ★ created_by を UserSimpleSerializer でネスト表示
     created_by = UserSimpleSerializer(read_only=True)
+    # ★ 添付ファイル一覧もまとめて含める
     attachments = AttachmentSerializer(many=True, read_only=True)
 
-from rest_framework import serializers
-from .models import Report
-
-class ReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Report
         fields = '__all__'
-        # created_by はリクエストユーザーから自動セットするため read_only にする
         read_only_fields = ('latitude', 'longitude', 'created_by', 'created_at', 'updated_at')
 
 

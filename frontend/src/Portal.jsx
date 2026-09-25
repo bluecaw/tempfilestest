@@ -68,7 +68,7 @@ const PORTAL_SECTIONS = [
         links: [
             {
                 title: '国土地理院 逆ジオコーディング API',
-                url: 'https://maps.gsi.go.jp/development/api.html',
+                url: 'https://maps.gsi.go.jp/js/muni.js',
                 description: '位置情報（緯度・経度）から住所テキストを無料取得するAPI仕様書',
                 badge: '位置情報 API',
                 badgeColor: 'badge-green',
