@@ -128,70 +128,46 @@ export default function Reports() {
             async (position) => {
                 try {
                     const { latitude, longitude } = position.coords;
-                    let fullAddress = '';
 
-                    // 1. 国土地理院 API（3秒タイムアウト設定付き）
-                    try {
-                        const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 3000);
+                    // Django バックエンド経由で安全に国土地理院 API を呼ぶ ＆ muni.json を取得
+                    const [res, muniData] = await Promise.all([
+                        api.get(`/reverse-geocode/?lat=${latitude}&lon=${longitude}`),
+                        fetchMuniMap()
+                    ]);
 
-                        const [res, muniData] = await Promise.all([
-                            fetch(
-                                `https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon=${longitude}&lat=${latitude}`,
-                                { signal: controller.signal }
-                            ),
-                            fetchMuniMap()
-                        ]);
-                        clearTimeout(timeoutId);
+                    if (res.data && res.data.results) {
+                        const { muniCd, lv01Nm } = res.data.results;
+                        let fullAddress = '';
 
-                        if (res.ok) {
-                            const data = await res.json();
-                            if (data.results) {
-                                const { muniCd, lv01Nm } = data.results;
-                                if (muniData) {
-                                    const key = muniCd ? muniCd.replace(/^0+/, '') : '';
-                                    const targetInfo = muniData[key] || muniData[muniCd];
-                                    if (targetInfo) {
-                                        const parts = targetInfo.split(',');
-                                        fullAddress = `${parts[1] || ''}${(parts[3] || '').replace(/\s+/g, '')}${lv01Nm || ''}`;
-                                    }
-                                }
-                                if (!fullAddress) fullAddress = lv01Nm || '';
+                        // muni.json (ローカルキャッシュ) から都道府県・市区町村名を取得
+                        if (muniData) {
+                            const key = muniCd ? muniCd.replace(/^0+/, '') : '';
+                            const targetInfo = muniData[key] || muniData[muniCd];
+
+                            if (targetInfo) {
+                                const parts = targetInfo.split(',');
+                                const prefName = parts[1] || '';
+                                const muniName = (parts[3] || '').replace(/\s+/g, '');
+
+                                fullAddress = `${prefName}${muniName}${lv01Nm || ''}`;
                             }
                         }
-                    } catch (gsiErr) {
-                        console.warn('国土地理院APIがタイムアウトまたはエラーのため、代替APIに切り替えます:', gsiErr);
-                    }
 
-                    // 2. 国土地理院 API から取得できなかった場合のフォールバック（OpenStreetMap / Nominatim API）
-                    if (!fullAddress) {
-                        try {
-                            const osmRes = await fetch(
-                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ja`
-                            );
-                            if (osmRes.ok) {
-                                const osmData = await osmRes.json();
-                                if (osmData && osmData.address) {
-                                    const a = osmData.address;
-                                    const province = a.province || a.state || '';
-                                    const city = a.city || a.ward || a.town || a.village || a.suburb || '';
-                                    const road = a.road || a.neighbourhood || '';
-                                    fullAddress = `${province}${city}${road}`.trim();
-                                }
-                            }
-                        } catch (osmErr) {
-                            console.error('代替APIからの住所取得にも失敗しました:', osmErr);
+                        if (!fullAddress) {
+                            fullAddress = lv01Nm || '';
                         }
-                    }
 
-                    if (fullAddress) {
-                        setFormData((prev) => ({ ...prev, address: fullAddress }));
-                        setMessage({ type: 'success', text: '住所を自動入力しました。' });
+                        if (fullAddress) {
+                            setFormData((prev) => ({ ...prev, address: fullAddress }));
+                            setMessage({ type: 'success', text: '住所を自動入力しました。' });
+                        } else {
+                            alert('該当する住所情報が見つかりませんでした。');
+                        }
                     } else {
-                        alert('該当する住所情報が見つかりませんでした。手動で入力してください。');
+                        alert('住所情報の取得に失敗しました。手動で入力してください。');
                     }
                 } catch (error) {
-                    console.error('位置情報処理エラー:', error);
+                    console.error('位置情報変換エラー:', error);
                     alert('住所の自動取得に失敗しました。手動で入力してください。');
                 } finally {
                     setGeoLoading(false);
@@ -201,7 +177,7 @@ export default function Reports() {
                 setGeoLoading(false);
                 alert('位置情報が取得できませんでした。ブラウザの位置情報許可をご確認ください。');
             },
-            { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
         );
     };
 
