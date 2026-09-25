@@ -116,6 +116,8 @@ export default function App() {
         try {
           const { latitude, longitude } = position.coords;
 
+          // OpenStreetMap (Nominatim API) を使用する場合（番地まで取得する場合）
+          // 国土地理院APIのままにする場合は、以下のURLを元のURLに戻してください。
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=ja`
           );
@@ -124,9 +126,9 @@ export default function App() {
 
           const data = await res.json();
 
+          // OpenStreetMap のレスポンス処理
           if (data && data.address) {
             const addr = data.address;
-
             const state = addr.province || addr.state || '';
             const city = addr.city || addr.ward || addr.town || addr.village || '';
             const suburb = addr.suburb || addr.neighbourhood || addr.quarter || '';
@@ -157,27 +159,26 @@ export default function App() {
       },
       (error) => {
         setGeoLoading(false);
-        console.warn('位置情報エラー詳細:', error.code, error.message);
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            alert('位置情報の利用が拒否されました。設定をご確認ください。');
+            alert('位置情報の利用が拒否されました。ブラウザの権限設定をご確認ください。');
             break;
           case error.POSITION_UNAVAILABLE:
             alert('位置情報が取得できませんでした。');
             break;
           case error.TIMEOUT:
-            alert('位置情報の取得に時間がかかりすぎました。もう一度お試しください。');
+            alert('位置情報の取得がタイムアウトしました。もう一度お試しください。');
             break;
           default:
             alert('位置情報の取得に失敗しました。');
             break;
         }
       },
-      // ★ ここを変更して高速化 ★
+      // ★ ここで高速化を行っています ★
       {
-        enableHighAccuracy: false, // WiFi/基地局を利用して高速化
-        timeout: 5000,             // 5秒応答がなければタイムアウト
-        maximumAge: 60000          // 直近1分以内の位置情報があればすぐ使う
+        enableHighAccuracy: false, // 高精度GPS待機をオフにし、Wi-Fi/基地局で即座に取得
+        timeout: 5000,             // 5秒応答がなければタイムアウトにする
+        maximumAge: 60000          // 直近1分以内に端末が取得した位置情報があれば再利用する
       }
     );
   };
