@@ -758,3 +758,167 @@ button:disabled {
   touch-action: manipulation;
   /* その他既存のスタイル */
 }
+
+/* ==========================================
+   ファイルアップロードエリア（FileUploadArea）
+   ========================================== */
+.file-upload-wrapper {
+  margin-bottom: 20px;
+}
+
+/* ドラッグ＆ドロップゾーン */
+.file-upload-area {
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 24px;
+  text-align: center;
+  background-color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-upload-area:hover {
+  border-color: #3b82f6;
+  background-color: #f0f9ff;
+}
+
+/* ドラッグオーバー時 */
+.file-upload-area.drag-over {
+  border-color: #2563eb;
+  background-color: #dbeafe;
+  transform: scale(1.01);
+}
+
+/* 圧縮処理中（ローディング状態） */
+.file-upload-area.compressing {
+  border-color: #f59e0b;
+  background-color: #fffbeb;
+  cursor: wait;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.file-label {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #334155;
+}
+
+.upload-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.file-label strong {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 4px;
+  color: #1e293b;
+}
+
+.file-label p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+/* プレビューグリッド */
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* プレビューカード */
+.preview-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.preview-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* 画像サムネイル */
+.preview-thumbnail {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  background-color: #f1f5f9;
+}
+
+/* 非画像ファイルのアイコン表示 */
+.preview-file-icon {
+  width: 100%;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  background-color: #f1f5f9;
+}
+
+/* ファイル情報 */
+.preview-info {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.preview-filename {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-filesize {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* 削除ボタン */
+.btn-remove-file {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  border: none;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-remove-file:hover {
+  background: rgba(220, 38, 38, 0.9);
+}
+
+.btn-remove-file:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

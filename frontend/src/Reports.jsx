@@ -6,18 +6,51 @@ import DatePicker, { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
 import 'react-datepicker/dist/react-datepicker.css';
 import Spinner from './Spinner';
+import imageCompression from 'browser-image-compression';
 
 registerLocale('ja', ja);
 
 // ==========================================
 // ドラッグ＆ドロップ ＆ プレビュー表示用コンポーネント
 // ==========================================
-function FileUploadArea({ files, onFilesChange }) {
+function FileUploadArea({ files, onFilesChange, disabled }) {
     const [isDragOver, setIsDragOver] = useState(false);
     const [previews, setPreviews] = useState([]);
+    const [isCompressing, setIsCompressing] = useState(false);
     const fileInputRef = useRef(null);
 
-    // ファイル選択変更時に Blob URL を生成し、アンマウント・変更時にメモリ解放
+    // 画像ファイルを圧縮する内部関数
+    const processFiles = async (inputFiles) => {
+        setIsCompressing(true);
+
+        const compressionOptions = {
+            maxSizeMB: 1,           // 最大1MB
+            maxWidthOrHeight: 1920, // 最大解像度 Full HD相当
+            useWebWorker: true,
+            fileType: 'image/webp'  // WebP変換
+        };
+
+        const processedFiles = await Promise.all(
+            inputFiles.map(async (file) => {
+                if (!file.type || !file.type.startsWith('image/')) {
+                    return file;
+                }
+
+                try {
+                    const compressed = await imageCompression(file, compressionOptions);
+                    const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+                    return new File([compressed], newFileName, { type: 'image/webp' });
+                } catch (error) {
+                    console.warn(`画像「${file.name}」の圧縮に失敗したため、元のファイルを使用します:`, error);
+                    return file;
+                }
+            })
+        );
+
+        setIsCompressing(false);
+        return processedFiles;
+    };
+
     useEffect(() => {
         const newPreviews = files.map((file) => {
             if (file.type && file.type.startsWith('image/')) {
@@ -42,7 +75,7 @@ function FileUploadArea({ files, onFilesChange }) {
     const handleDragOver = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        setIsDragOver(true);
+        if (!isCompressing && !disabled) setIsDragOver(true);
     };
 
     const handleDragLeave = (e) => {
@@ -51,23 +84,26 @@ function FileUploadArea({ files, onFilesChange }) {
         setIsDragOver(false);
     };
 
-    const handleDrop = (e) => {
+    const handleDrop = async (e) => {
         e.preventDefault();
         e.stopPropagation();
         setIsDragOver(false);
+        if (isCompressing || disabled) return;
 
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const droppedFiles = Array.from(e.dataTransfer.files);
-            onFilesChange([...files, ...droppedFiles]);
+            const compressedFiles = await processFiles(droppedFiles);
+            onFilesChange([...files, ...compressedFiles]);
             e.dataTransfer.clearData();
         }
     };
 
-    const handleFileSelect = (e) => {
+    const handleFileSelect = async (e) => {
         if (e.target.files && e.target.files.length > 0) {
             const selectedFiles = Array.from(e.target.files);
-            onFilesChange([...files, ...selectedFiles]);
-            e.target.value = ''; // 同じファイルの再選択を許可
+            const compressedFiles = await processFiles(selectedFiles);
+            onFilesChange([...files, ...compressedFiles]);
+            e.target.value = '';
         }
     };
 
@@ -79,25 +115,30 @@ function FileUploadArea({ files, onFilesChange }) {
     return (
         <div className="file-upload-wrapper">
             <div
-                className={`file-upload-area ${isDragOver ? 'drag-over' : ''}`}
+                className={`file-upload-area ${isDragOver ? 'drag-over' : ''} ${isCompressing ? 'compressing' : ''}`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => !isCompressing && !disabled && fileInputRef.current?.click()}
+                style={{
+                    opacity: isCompressing || disabled ? 0.6 : 1,
+                    cursor: isCompressing || disabled ? 'not-allowed' : 'pointer'
+                }}
             >
                 <input
                     type="file"
                     multiple
-                    accept="image/jpeg,image/png,image/gif,application/pdf,.xlsx,.docx,.zip"
+                    accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.xlsx,.docx,.zip"
                     ref={fileInputRef}
                     className="hidden-file-input"
                     onChange={handleFileSelect}
+                    disabled={isCompressing || disabled}
                 />
                 <div className="file-label">
-                    <span className="upload-icon">📎</span>
+                    <span className="upload-icon">{isCompressing ? '⏳' : '📎'}</span>
                     <div>
-                        <strong>ファイルをドラッグ＆ドロップ</strong>
-                        <p>またはクリックして選択 (写真, PDF, Excel, Word, ZIP 等 / 最大50MB)</p>
+                        <strong>{isCompressing ? '画像を自動圧縮・最適化中...' : 'ファイルをドラッグ＆ドロップ'}</strong>
+                        <p>{isCompressing ? 'しばらくお待ちください' : 'またはクリックして選択 (写真, PDF, Excel, Word, ZIP 等 / 画像は自動最適化されます)'}</p>
                     </div>
                 </div>
             </div>
@@ -126,6 +167,7 @@ function FileUploadArea({ files, onFilesChange }) {
                                 type="button"
                                 className="btn-remove-file"
                                 title="削除"
+                                disabled={isCompressing || disabled}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleRemoveFile(index);
@@ -164,7 +206,8 @@ export default function Reports() {
         date: '',
         title: '',
         address: '',
-        description: ''
+        description: '',
+        status: ''
     });
     const [editLoading, setEditLoading] = useState(false);
 
@@ -174,7 +217,7 @@ export default function Reports() {
     const [geoLoading, setGeoLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
 
-    // メモリキャッシュ用 useRef (レンダリング間で保持)
+    // メモリキャッシュ用 useRef
     const cachedMuniDataRef = useRef(null);
 
     useEffect(() => {
@@ -208,16 +251,13 @@ export default function Reports() {
     const handleSearch = (newFilters) => setFilters(newFilters);
     const handleReset = () => setFilters({});
 
-    // 修正後
     const handleDownloadAttachment = async (attachmentId) => {
-        // 1. 非同期処理の「前」に空のタブを開いておく（iOS Safari のポップアップブロック回避策）
         const newTab = window.open('about:blank', '_blank');
 
         try {
             const res = await api.get(`/attachments/${attachmentId}/download/`);
 
             if (res.data.download_url) {
-                // 2. 取得したURLへリダイレクト
                 if (newTab) {
                     newTab.location.href = res.data.download_url;
                 } else {
@@ -245,7 +285,8 @@ export default function Reports() {
             date: report.date || '',
             title: report.title || '',
             address: report.address || '',
-            description: report.description || ''
+            description: report.description || '',
+            status: report.status || 'Draft'
         });
     };
 
@@ -333,7 +374,7 @@ export default function Reports() {
                             }
                         }
                     } catch (e) {
-                        console.warn('国土地理院APIからの取得に失敗またはタイムアウトしました。muni.jsonのみで解決を試みます。');
+                        console.warn('国土地理院APIからの取得に失敗またはタイムアウトしました。');
                     }
 
                     let fullAddress = '';
@@ -376,26 +417,73 @@ export default function Reports() {
         );
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    // フォーム送信ハンドラー (targetStatus: 'Draft' または 'Pending')
+    const handleSubmit = async (targetStatus) => {
+        if (!formData.report_no.trim() || !formData.reception_no.trim() || !formData.title.trim() || !formData.description.trim()) {
+            alert('必須項目（報告日付、件名番号、受付番号、件名、業務内容）をすべて入力してください。');
+            return;
+        }
+
         setLoading(true);
         try {
-            const reportRes = await api.post('/reports/', formData);
+            // 1. 報告本体の登録
+            const payload = {
+                ...formData,
+                status: targetStatus
+            };
+            const reportRes = await api.post('/reports/', payload);
             const reportId = reportRes.data.id;
-            for (const file of files) {
+
+            // 2. 添付ファイルがある場合は一括アップロードAPIを呼出
+            if (files.length > 0) {
                 const uploadData = new FormData();
-                uploadData.append('report_id', reportId);
-                uploadData.append('file', file);
-                await api.post('/attachments/', uploadData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                files.forEach((file) => {
+                    uploadData.append('files', file);
+                });
+
+                await api.post(`/reports/${reportId}/bulk_upload/`, uploadData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
             }
-            setMessage({ type: 'success', text: '業務報告を登録しました。' });
-            setFormData({ report_no: '', reception_no: '', date: new Date().toISOString().split('T')[0], title: '', address: '', description: '' });
+
+            const successMsg = targetStatus === 'Draft'
+                ? '業務報告を「下書き」として保存しました。'
+                : '業務報告を提出（承認申請）しました。';
+
+            setMessage({ type: 'success', text: successMsg });
+
+            // フォームリセット
+            setFormData({
+                report_no: '',
+                reception_no: '',
+                date: new Date().toISOString().split('T')[0],
+                title: '',
+                address: '',
+                description: ''
+            });
             setFiles([]);
             fetchReports();
         } catch (err) {
-            setMessage({ type: 'error', text: '登録エラーが発生しました。' });
+            console.error('送信エラー:', err);
+            setMessage({ type: 'error', text: '登録エラーが発生しました: ' + (err.response?.data?.detail || '入力内容を確認してください。') });
         } finally {
             setLoading(false);
+        }
+    };
+
+    // ステータス表示用のバッジ描画関数
+    const renderStatusBadge = (status) => {
+        switch (status) {
+            case 'Draft':
+                return <span className="status-badge draft" style={{ backgroundColor: '#64748b', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontSize: '11px' }}>下書き</span>;
+            case 'Pending':
+                return <span className="status-badge pending" style={{ backgroundColor: '#f59e0b', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontSize: '11px' }}>承認待ち</span>;
+            case 'Approved':
+                return <span className="status-badge approved" style={{ backgroundColor: '#10b981', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontSize: '11px' }}>承認済み</span>;
+            case 'Rejected':
+                return <span className="status-badge rejected" style={{ backgroundColor: '#ef4444', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontSize: '11px' }}>差戻し</span>;
+            default:
+                return null;
         }
     };
 
@@ -413,7 +501,7 @@ export default function Reports() {
                     <div className="card-header">
                         <h2>新規業務報告の登録</h2>
                     </div>
-                    <form onSubmit={handleSubmit} className="report-form">
+                    <form onSubmit={(e) => e.preventDefault()} className="report-form">
                         <div className="form-row">
                             <div className="input-field">
                                 <label>報告日付 *</label>
@@ -427,6 +515,7 @@ export default function Reports() {
                                     locale="ja"
                                     placeholderText="年/月/日"
                                     required
+                                    disabled={loading}
                                 />
                             </div>
                             <div className="input-field">
@@ -438,6 +527,7 @@ export default function Reports() {
                                     value={formData.report_no}
                                     onChange={handleInputChange}
                                     required
+                                    disabled={loading}
                                 />
                             </div>
                             <div className="input-field">
@@ -449,6 +539,7 @@ export default function Reports() {
                                     value={formData.reception_no}
                                     onChange={handleInputChange}
                                     required
+                                    disabled={loading}
                                 />
                             </div>
                         </div>
@@ -463,6 +554,7 @@ export default function Reports() {
                                     value={formData.title}
                                     onChange={handleInputChange}
                                     required
+                                    disabled={loading}
                                 />
                             </div>
                         </div>
@@ -474,7 +566,7 @@ export default function Reports() {
                                     <button
                                         type="button"
                                         onClick={handleGetLocation}
-                                        disabled={geoLoading}
+                                        disabled={geoLoading || loading}
                                         className="btn-outline"
                                         style={{ padding: '2px 8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}
                                     >
@@ -494,6 +586,7 @@ export default function Reports() {
                                     placeholder="例: 東京都千代田区霞が関3-1-1"
                                     value={formData.address}
                                     onChange={handleInputChange}
+                                    disabled={loading}
                                 />
                             </div>
                         </div>
@@ -507,6 +600,7 @@ export default function Reports() {
                                 value={formData.description}
                                 onChange={handleInputChange}
                                 required
+                                disabled={loading}
                             />
                         </div>
 
@@ -516,19 +610,39 @@ export default function Reports() {
                             <FileUploadArea
                                 files={files}
                                 onFilesChange={setFiles}
+                                disabled={loading}
                             />
                         </div>
 
-                        <button type="submit" disabled={loading} className="btn-glow submit-btn" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-                            {loading ? (
-                                <>
-                                    <Spinner size={18} />
-                                    <span>保存・R2へファイル送信中...</span>
-                                </>
-                            ) : (
-                                '業務報告を送信・登録'
-                            )}
-                        </button>
+                        {/* 送信ボタンエリア */}
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                            <button
+                                type="button"
+                                disabled={loading}
+                                onClick={() => handleSubmit('Draft')}
+                                className="btn-outline"
+                                style={{ flex: 1, padding: '12px', fontWeight: 'bold' }}
+                            >
+                                下書き保存
+                            </button>
+
+                            <button
+                                type="button"
+                                disabled={loading}
+                                onClick={() => handleSubmit('Pending')}
+                                className="btn-glow submit-btn"
+                                style={{ flex: 1, padding: '12px', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                            >
+                                {loading ? (
+                                    <>
+                                        <Spinner size={18} />
+                                        <span>送信中...</span>
+                                    </>
+                                ) : (
+                                    '報告を提出（承認申請）'
+                                )}
+                            </button>
+                        </div>
                     </form>
                 </section>
 
@@ -550,9 +664,10 @@ export default function Reports() {
                             reports.map(r => (
                                 <div key={r.id} className="report-card-item">
                                     <div className="item-top">
-                                        <div className="tags">
+                                        <div className="tags" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                                             <span className="tag-no">No. {r.report_no}</span>
                                             <span className="tag-rec">受付: {r.reception_no}</span>
+                                            {renderStatusBadge(r.status)}
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <span className="item-date">{r.date}</span>
@@ -581,7 +696,6 @@ export default function Reports() {
                                     <div className="item-footer">
                                         <span className="item-author">👤 担当: {r.created_by?.username || r.user?.username || '未定義'}</span>
                                     </div>
-                                    {/* 修正箇所の周辺 */}
                                     {r.attachments?.length > 0 && (
                                         <div className="item-attachments">
                                             <div className="attachment-chips">
@@ -590,7 +704,7 @@ export default function Reports() {
                                                         key={att.id}
                                                         type="button"
                                                         onClick={(e) => {
-                                                            e.stopPropagation(); // 親要素へのイベント伝播を停止
+                                                            e.stopPropagation();
                                                             handleDownloadAttachment(att.id);
                                                         }}
                                                         className="attachment-chip"
@@ -621,6 +735,17 @@ export default function Reports() {
                                 <div className="input-field"><label>日付 *</label><input type="date" name="date" value={editFormData.date} onChange={handleEditInputChange} required /></div>
                                 <div className="input-field"><label>件名番号 *</label><input type="text" name="report_no" value={editFormData.report_no} onChange={handleEditInputChange} required /></div>
                                 <div className="input-field"><label>受付番号 *</label><input type="text" name="reception_no" value={editFormData.reception_no} onChange={handleEditInputChange} required /></div>
+                            </div>
+                            <div className="form-row">
+                                <div className="input-field full-width">
+                                    <label>ステータス</label>
+                                    <select name="status" value={editFormData.status} onChange={handleEditInputChange} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: '#0f172a', color: '#fff', border: '1px solid #334155' }}>
+                                        <option value="Draft">下書き</option>
+                                        <option value="Pending">承認待ち (提出)</option>
+                                        <option value="Approved">承認済み</option>
+                                        <option value="Rejected">差戻し</option>
+                                    </select>
+                                </div>
                             </div>
                             <div className="input-field full-width"><label>件名 *</label><input type="text" name="title" value={editFormData.title} onChange={handleEditInputChange} required /></div>
                             <div className="input-field full-width"><label>住所</label><input type="text" name="address" value={editFormData.address} onChange={handleEditInputChange} /></div>
