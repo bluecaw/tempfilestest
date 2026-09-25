@@ -2,6 +2,9 @@
 
 import uuid
 import json
+import csv
+from io import BytesIO
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.views import APIView
@@ -12,17 +15,31 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import ReportFilter
 from django.shortcuts import get_object_or_404
-from django.http import HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 
+# ReportLab (PDF生成用)
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
 from .models import Report, Attachment, OperationLog, PasswordResetOTP
 from .serializers import ReportSerializer, AttachmentSerializer, AttachmentUploadSerializer
 from .s3_utils import R2Service
 from .utils import send_realtime_notification  # ★ 通知ヘルパーのインポート
+
+
+# 日本語フォント登録 (ReportLab)
+try:
+    pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
+    DEFAULT_PDF_FONT = 'HeiseiKakuGo-W5'
+except Exception:
+    DEFAULT_PDF_FONT = 'Helvetica'
 
 
 # --------------------------------------------------
@@ -50,20 +67,17 @@ def log_operation(user, action, target_model, target_id, details="", request=Non
     )
 
 
-# backend/reports/views.py
-
+# --------------------------------------------------
+# 業務報告 ViewSet (ステータス管理・検索・フィルター対応)
+# --------------------------------------------------
 class ReportViewSet(viewsets.ModelViewSet):
     queryset = Report.objects.all().prefetch_related('attachments', 'created_by')
     serializer_class = ReportSerializer
     permission_classes = [IsAuthenticated]
 
-    # ★ 1. フィルターバックエンドを追加
+    # フィルター・検索・ソートの設定
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-
-    # ★ 2. 作成した FilterSet を指定（日付・作成者・ステータス用）
     filterset_class = ReportFilter
-
-    # ★ 3. あいまい検索 (?search=...) 対象のフィールドを指定
     search_fields = [
         'title',
         'description',
@@ -71,25 +85,20 @@ class ReportViewSet(viewsets.ModelViewSet):
         'reception_no',
         'address',
     ]
-
-    # ★ 4. ソート対象フィールドを指定
     ordering_fields = ['date', 'created_at', 'status']
 
-    def perform_create(self, serializer):
-        report = serializer.save(created_by=self.request.user)
-        log_operation(self.request.user, 'CREATE', 'Report', report.id, f"件名: {report.title}", self.request)
-
-        # ★ 1. 上司（boss）の判定
+    def _notify_boss_or_all(self, report):
+        """承認申請時に上司（または全体）へWebSocket通知を送信する内部ヘルパー"""
         boss = None
-        if hasattr(self.request.user, 'userprofile') and hasattr(self.request.user.userprofile, 'boss'):
-            boss = self.request.user.userprofile.boss
+        user_profile = getattr(self.request.user, 'userprofile', None)
+        if user_profile:
+            boss = getattr(user_profile, 'boss', None) or getattr(user_profile, 'supervisor', None)
 
-        # ★ 2. 上司が設定されていれば上司へ、設定されていなければテスト/全体用に全ユーザー通知
         if boss:
             send_realtime_notification(
                 user_id=boss.id,
                 notification_type="NEW_REPORT",
-                message=f"{self.request.user.username} さんから新しい日報が提出されました。",
+                message=f"{self.request.user.username} さんから日報「{report.title}」が提出（承認申請）されました。",
                 report_id=report.id
             )
         else:
@@ -103,28 +112,96 @@ class ReportViewSet(viewsets.ModelViewSet):
                     'type': 'send_notification',
                     'message': {
                         'notification_type': 'NEW_REPORT',
-                        'message': f"【全体通知】{self.request.user.username} さんが日報「{report.title}」を作成しました。",
+                        'message': f"【全体通知】{self.request.user.username} さんが日報「{report.title}」を提出しました。",
                         'report_id': report.id
                     }
                 }
             )
+
+    def perform_create(self, serializer):
+        report = serializer.save(created_by=self.request.user)
+        log_operation(
+            self.request.user, 
+            'CREATE', 
+            'Report', 
+            report.id, 
+            f"新規作成 (件名: {report.title}, ステータス: {report.get_status_display()})", 
+            self.request
+        )
+
+        # ステータスが「承認待ち (Pending)」の場合のみ通知を発行
+        if report.status == Report.Status.PENDING:
+            self._notify_boss_or_all(report)
+
+    def perform_update(self, serializer):
+        old_status = self.get_object().status
+        report = serializer.save()
+        log_operation(
+            self.request.user, 
+            'UPDATE', 
+            'Report', 
+            report.id, 
+            f"更新 (件名: {report.title}, ステータス: {report.get_status_display()})", 
+            self.request
+        )
+
+        # 「下書き」等から「承認待ち (Pending)」に移行した場合に通知
+        if old_status != Report.Status.PENDING and report.status == Report.Status.PENDING:
+            self._notify_boss_or_all(report)
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         log_operation(request.user, 'READ', 'Report', instance.id, f"閲覧件名: {instance.title}", request)
         return super().retrieve(request, *args, **kwargs)
 
+    # -------------------------------------------------------------
+    # 汎用ステータス変更アクション (PATCH /api/reports/{id}/change_status/)
+    # -------------------------------------------------------------
+    @action(detail=True, methods=['patch'], url_path='change_status')
+    def change_status(self, request, pk=None):
+        report = self.get_object()
+        new_status = request.data.get('status')
+
+        valid_statuses = [choice[0] for choice in Report.Status.choices]
+        if new_status not in valid_statuses:
+            return Response(
+                {'error': f'無効なステータスです。選択可能値: {valid_statuses}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        old_status = report.status
+        report.status = new_status
+        report.save()
+
+        log_operation(
+            request.user, 
+            'UPDATE', 
+            'Report', 
+            report.id, 
+            f"ステータス変更: {old_status} -> {new_status}", 
+            request
+        )
+
+        # 「承認待ち」に変更された場合は上司へ通知
+        if new_status == Report.Status.PENDING and old_status != Report.Status.PENDING:
+            self._notify_boss_or_all(report)
+
+        serializer = self.get_serializer(report)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # -------------------------------------------------------------
+    # 差し戻しアクション (POST /api/reports/{id}/remand/)
+    # -------------------------------------------------------------
     @action(detail=True, methods=['post'], url_path='remand')
     def remand_report(self, request, pk=None):
-        """★ 上司による差し戻しアクション"""
+        """上司による差し戻し（Rejected）アクション"""
         report = self.get_object()
         comment = request.data.get('comment', '')
 
-        if hasattr(report, 'status'):
-            report.status = 'REMANDED'
-            report.save()
+        report.status = Report.Status.REJECTED
+        report.save()
 
-        log_operation(request.user, 'UPDATE', 'Report', report.id, f"差し戻し: {report.title}", request)
+        log_operation(request.user, 'UPDATE', 'Report', report.id, f"差し戻し: {report.title} (コメント: {comment})", request)
 
         send_realtime_notification(
             user_id=report.created_by.id,
@@ -135,14 +212,16 @@ class ReportViewSet(viewsets.ModelViewSet):
 
         return Response({"detail": "日報を差し戻しました。"}, status=status.HTTP_200_OK)
 
+    # -------------------------------------------------------------
+    # 承認アクション (POST /api/reports/{id}/approve/)
+    # -------------------------------------------------------------
     @action(detail=True, methods=['post'], url_path='approve')
     def approve_report(self, request, pk=None):
-        """★ 上司による承認アクション"""
+        """上司による承認（Approved）アクション"""
         report = self.get_object()
 
-        if hasattr(report, 'status'):
-            report.status = 'APPROVED'
-            report.save()
+        report.status = Report.Status.APPROVED
+        report.save()
 
         log_operation(request.user, 'UPDATE', 'Report', report.id, f"承認: {report.title}", request)
 
@@ -155,6 +234,133 @@ class ReportViewSet(viewsets.ModelViewSet):
 
         return Response({"detail": "日報を承認しました。"}, status=status.HTTP_200_OK)
 
+    # -------------------------------------------------------------
+    # 添付ファイル一括アップロード (POST /api/reports/{id}/bulk_upload/)
+    # -------------------------------------------------------------
+    @action(detail=True, methods=['post'], url_path='bulk_upload')
+    def bulk_upload(self, request, pk=None):
+        report = self.get_object()
+        files = request.FILES.getlist('files')
+
+        if not files:
+            return Response({'detail': 'ファイルが添付されていません。'}, status=status.HTTP_400_BAD_REQUEST)
+
+        created_attachments = []
+        r2_service = R2Service()
+
+        date_str = report.date.strftime('%Y')
+        report_no_padded = str(report.report_no).zfill(4)
+
+        for file_obj in files:
+            unique_name = f"{uuid.uuid4().hex}_{file_obj.name}"
+            r2_key = f"reports/{date_str}/{report_no_padded}/{unique_name}"
+
+            # Cloudflare R2へアップロード
+            r2_service.upload_file(
+                file_obj=file_obj,
+                r2_key=r2_key,
+                content_type=file_obj.content_type
+            )
+
+            # DB保存
+            attachment = Attachment.objects.create(
+                report=report,
+                filename=unique_name,
+                original_filename=file_obj.name,
+                r2_key=r2_key,
+                content_type=file_obj.content_type,
+                file_size=file_obj.size,
+                uploaded_by=request.user
+            )
+            created_attachments.append(attachment)
+            log_operation(request.user, 'CREATE', 'Attachment', attachment.id, f"一括アップロード: {attachment.original_filename}", request)
+
+        serializer = AttachmentSerializer(created_attachments, many=True)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    # -------------------------------------------------------------
+    # ★ 新規追加: CSV 一括出力 (GET /api/reports/export_csv/)
+    # -------------------------------------------------------------
+    @action(detail=False, methods=['get'], url_path='export_csv')
+    def export_csv(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # UTF-8 with BOM でExcel文字化けを防ぐ
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="reports.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(['ID', '日付', '件名番号', '受付番号', '件名', '住所', '詳細内容', 'ステータス', '作成者'])
+
+        for r in queryset:
+            status_text = r.get_status_display() if hasattr(r, 'get_status_display') else r.status
+            creator_text = r.created_by.username if r.created_by else ''
+
+            writer.writerow([
+                r.id,
+                r.date,
+                r.report_no,
+                r.reception_no,
+                r.title,
+                r.address or '',
+                r.description,
+                status_text,
+                creator_text
+            ])
+
+        log_operation(request.user, 'READ', 'Report', 'ALL', f"CSVエクスポート (件数: {queryset.count()})", request)
+        return response
+
+    # -------------------------------------------------------------
+    # ★ 新規追加: PDF 個別出力 (GET /api/reports/{id}/export_pdf/)
+    # -------------------------------------------------------------
+    @action(detail=True, methods=['get'], url_path='export_pdf')
+    def export_pdf(self, request, pk=None):
+        report = self.get_object()
+
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer, pagesize=A4)
+        width, height = A4
+
+        # タイトル
+        p.setFont(DEFAULT_PDF_FONT, 16)
+        p.drawString(50, height - 50, f"業務報告書 (件名番号: {report.report_no})")
+
+        # 基本情報
+        p.setFont(DEFAULT_PDF_FONT, 10)
+        p.drawString(50, height - 85, f"報告日付: {report.date}")
+        p.drawString(250, height - 85, f"受付番号: {report.reception_no}")
+        p.drawString(50, height - 105, f"件名: {report.title}")
+        p.drawString(50, height - 125, f"住所: {report.address or '未設定'}")
+        p.drawString(50, height - 145, f"担当者: {report.created_by.username if report.created_by else '未設定'}")
+
+        # 区切り線
+        p.line(50, height - 155, width - 50, height - 155)
+
+        # 詳細テキスト
+        p.drawString(50, height - 175, "【業務内容詳細】")
+        text_obj = p.beginText(50, height - 195)
+        text_obj.setFont(DEFAULT_PDF_FONT, 10)
+
+        description_lines = report.description.splitlines() if report.description else []
+        for line in description_lines:
+            text_obj.textLine(line)
+
+        p.drawText(text_obj)
+        p.showPage()
+        p.save()
+
+        buffer.seek(0)
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="report_{report.id}.pdf"'
+
+        log_operation(request.user, 'READ', 'Report', report.id, f"PDFエクスポート: {report.title}", request)
+        return response
+
+
+# ==========================================
+# 添付ファイル個別管理ビュー
+# ==========================================
 
 class AttachmentUploadView(APIView):
     permission_classes = [IsAuthenticated]
@@ -349,7 +555,7 @@ class ConfirmPasswordResetOTPView(APIView):
 
 
 # ==========================================
-# ★ WebSocket動作検証用テストAPI（末尾に追加）
+# WebSocket動作検証用テストAPI
 # ==========================================
 class TestNotificationView(APIView):
     """ログイン中の自身に対してWebSocket通知を即時発行するテストAPI"""
