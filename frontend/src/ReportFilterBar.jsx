@@ -1,29 +1,94 @@
 // src/ReportFilterBar.jsx
 import React, { useState } from 'react';
+import DatePicker, { registerLocale } from 'react-datepicker';
+import ja from 'date-fns/locale/ja';
+import 'react-datepicker/dist/react-datepicker.css';
+
+// 日本語化設定
+registerLocale('ja', ja);
 
 export const ReportFilterBar = ({ onSearch, onReset }) => {
     const [search, setSearch] = useState('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    const [startDate, setStartDate] = useState(null);
+    const [endDate, setEndDate] = useState(null);
+
+    // Dateオブジェクトを YYYY-MM-DD 形式の文字列に変換するヘルパー関数
+    const formatDate = (date) => {
+        if (!date) return '';
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
 
     const handleSearch = (e) => {
         e.preventDefault();
         onSearch({
             search,
-            start_date: startDate,
-            end_date: endDate,
+            start_date: formatDate(startDate),
+            end_date: formatDate(endDate),
         });
     };
 
     const handleReset = () => {
         setSearch('');
-        setStartDate('');
-        setEndDate('');
+        setStartDate(null);
+        setEndDate(null);
         onReset();
     };
 
     return (
         <form onSubmit={handleSearch} style={styles.container}>
+            {/* 組み込みスタイル：ダークモード対応CSS */}
+            <style>{`
+        .custom-datepicker {
+          width: 100%;
+          padding: 8px 12px;
+          background-color: rgba(15, 23, 42, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          border-radius: 6px;
+          font-size: 14px;
+          color: #ffffff;
+          outline: none;
+          box-sizing: border-box;
+          cursor: pointer;
+        }
+        .custom-datepicker:focus {
+          border-color: #2563eb;
+        }
+        /* ポップアップカレンダーのダークモードカスタマイズ */
+        .react-datepicker {
+          background-color: #1e293b !important;
+          border-color: rgba(255, 255, 255, 0.2) !important;
+          font-family: inherit;
+        }
+        .react-datepicker__header {
+          background-color: #0f172a !important;
+          border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+        }
+        .react-datepicker__current-month,
+        .react-datepicker-time__header,
+        .react-datepicker-year-header,
+        .react-datepicker__day-name {
+          color: #f8fafc !important;
+        }
+        .react-datepicker__day {
+          color: #cbd5e1 !important;
+        }
+        .react-datepicker__day:hover {
+          background-color: #334155 !important;
+          color: #fff !important;
+        }
+        .react-datepicker__day--selected,
+        .react-datepicker__day--keyboard-selected {
+          background-color: #2563eb !important;
+          color: #fff !important;
+        }
+        .react-datepicker__triangle {
+          display: none !important;
+        }
+      `}</style>
+
             <div style={styles.field}>
                 <label style={styles.label}>キーワード検索</label>
                 <input
@@ -37,21 +102,28 @@ export const ReportFilterBar = ({ onSearch, onReset }) => {
 
             <div style={styles.field}>
                 <label style={styles.label}>開始日</label>
-                <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    style={styles.input}
+                <DatePicker
+                    selected={startDate}
+                    onChange={(date) => setStartDate(date)}
+                    dateFormat="yyyy/MM/dd"
+                    locale="ja"
+                    placeholderText="年/月/日を選択"
+                    className="custom-datepicker"
+                    isClearable
                 />
             </div>
 
             <div style={styles.field}>
                 <label style={styles.label}>終了日</label>
-                <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    style={styles.input}
+                <DatePicker
+                    selected={endDate}
+                    onChange={(date) => setEndDate(date)}
+                    dateFormat="yyyy/MM/dd"
+                    locale="ja"
+                    placeholderText="年/月/日を選択"
+                    className="custom-datepicker"
+                    isClearable
+                    minDate={startDate}
                 />
             </div>
 
@@ -79,7 +151,6 @@ const styles = {
         alignItems: 'flex-end',
         marginBottom: '20px',
         padding: '16px',
-        // ★ 周りのUIに合わせたダーク透過背景と枠線に変更
         backgroundColor: 'rgba(255, 255, 255, 0.05)',
         borderRadius: '12px',
         border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -94,18 +165,17 @@ const styles = {
         fontSize: '12px',
         marginBottom: '6px',
         fontWeight: 'bold',
-        // ★ 文字色を白系に調整
         color: '#94a3b8',
     },
     input: {
         padding: '8px 12px',
-        // ★ 入力欄背景を暗くし、テキスト色・枠線を白系へ変更
         backgroundColor: 'rgba(15, 23, 42, 0.6)',
         border: '1px solid rgba(255, 255, 255, 0.15)',
         borderRadius: '6px',
         fontSize: '14px',
         color: '#ffffff',
         outline: 'none',
+        boxSizing: 'border-box',
     },
     buttonGroup: {
         display: 'flex',
@@ -118,7 +188,6 @@ const styles = {
         cursor: 'pointer',
         fontSize: '14px',
         fontWeight: 'bold',
-        transition: 'all 0.2s ease',
     },
     searchBtn: {
         backgroundColor: '#2563eb',
