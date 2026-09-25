@@ -2,7 +2,6 @@
 
 import uuid
 import json
-import requests  # ★ 追加：国土地理院APIプロキシ用
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.views import APIView
@@ -350,7 +349,7 @@ class ConfirmPasswordResetOTPView(APIView):
 
 
 # ==========================================
-# WebSocket動作検証用テストAPI
+# ★ WebSocket動作検証用テストAPI（末尾に追加）
 # ==========================================
 class TestNotificationView(APIView):
     """ログイン中の自身に対してWebSocket通知を即時発行するテストAPI"""
@@ -366,34 +365,3 @@ class TestNotificationView(APIView):
         return Response({
             "detail": f"ユーザーID: {request.user.id} 宛てにリアルタイム通知を送信しました。"
         }, status=status.HTTP_200_OK)
-
-
-# ==========================================
-# ★ 国土地理院 API プロキシビュー（追加）
-# ==========================================
-class ReverseGeocoderProxyView(APIView):
-    """国土地理院 API のプロキシビュー（CSP違反・タイムアウト回避用）"""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        lat = request.query_params.get('lat')
-        lon = request.query_params.get('lon')
-
-        if not lat or not lon:
-            return Response({'error': '緯度(lat)と経度(lon)が必要です'}, status=status.HTTP_400_BAD_REQUEST)
-
-        url = f"https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon={lon}&lat={lat}"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-
-        try:
-            # タイムアウトを 10 秒に設定し、バックエンドから国土地理院 API を取得
-            res = requests.get(url, headers=headers, timeout=10)
-            if res.status_code == 200:
-                return Response(res.json())
-            return Response({'error': '国土地理院APIでエラーが発生しました'}, status=res.status_code)
-        except requests.exceptions.Timeout:
-            return Response({'error': '国土地理院APIがタイムアウトしました'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

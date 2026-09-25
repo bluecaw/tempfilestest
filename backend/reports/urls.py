@@ -5,7 +5,8 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import ReportViewSet, AttachmentUploadView, AttachmentDownloadView, GetCSRFTokenView, LoginView, LogoutView, UserView, RequestPasswordResetOTPView, ConfirmPasswordResetOTPView, TestNotificationView, ReverseGeocoderProxyView
+from .views import ReportViewSet, AttachmentUploadView, AttachmentDownloadView, GetCSRFTokenView, LoginView, LogoutView, UserView, RequestPasswordResetOTPView, ConfirmPasswordResetOTPView, TestNotificationView
+
 router = DefaultRouter()
 router.register(r'reports', ReportViewSet, basename='report')
 
@@ -28,5 +29,4 @@ urlpatterns = [
     path('auth/password-reset/request/', RequestPasswordResetOTPView.as_view(), name='password_reset_request'),
     path('auth/password-reset/confirm/', ConfirmPasswordResetOTPView.as_view(), name='password_reset_confirm'),
     path('test-notification/', TestNotificationView.as_view(), name='test-notification'),
-    path('reverse-geocode/', ReverseGeocoderProxyView.as_view(), name='reverse-geocode'),
 ]
