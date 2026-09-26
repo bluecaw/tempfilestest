@@ -581,23 +581,22 @@ class TestNotificationView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-class SlackActionView(APIView):
+class SlackActionWebhookView(APIView):
+    permission_classes = [AllowAny]  # SlackからのWebhookを受け取るため認証を緩和
+
     def post(self, request, *args, **kwargs):
-        # Slackからのpayloadを取得（POSTデータの中に入っています）
         payload_raw = request.data.get('payload')
         if not payload_raw:
             return Response({"error": "No payload"}, status=status.HTTP_400_BAD_REQUEST)
         
         payload = json.loads(payload_raw)
-        
-        # 押されたボタンのアクションを取得
         actions = payload.get('actions', [])
         if not actions:
             return Response(status=status.HTTP_200_OK)
         
         action = actions[0]
-        action_id = action.get('action_id')  # 例: 'approve_report', 'reject_report'
-        report_id = action.get('value')      # ボタンに埋め込んだ report_id
+        action_id = action.get('action_id')
+        report_id = action.get('value')
         user_name = payload.get('user', {}).get('username', '管理者')
 
         try:
@@ -605,16 +604,15 @@ class SlackActionView(APIView):
         except Report.DoesNotExist:
             return Response({"text": "対象の日報が見つかりませんでした。"}, status=status.HTTP_200_OK)
 
-        # 1. すでに処理済みか判定する (二重防止チェック)
+        # 二重送信・連打防止のチェック
         if report.status in [Report.Status.APPROVED, Report.Status.REJECTED]:
-            # すでに変更済みの場合は、現在のステータスをそのままメッセージとして返して終了
             status_label = "承認済み" if report.status == Report.Status.APPROVED else "差し戻し済み"
             return Response({
                 "replace_original": True,
                 "text": f"⚠️ この日報は既に【{status_label}】処理が完了しています。"
             }, status=status.HTTP_200_OK)
 
-        # 2. ステータスの更新処理
+        # ステータス変更処理
         if action_id == 'approve_report':
             report.status = Report.Status.APPROVED
             status_text = f"✅ *{user_name}* さんがこの日報を *承認* しました。"
@@ -626,7 +624,7 @@ class SlackActionView(APIView):
 
         report.save()
 
-        # 3. ボタンを消去したメッセージをレスポンスで返し、Slack上のメッセージを書き換える
+        # メッセージをボタンなしの静的テキストに更新して連打を防止
         updated_blocks = [
             {
                 "type": "section",
@@ -639,12 +637,11 @@ class SlackActionView(APIView):
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": status_text  # ボタンの代わりに「承認しました」のテキストを表示
+                    "text": status_text
                 }
             }
         ]
 
-        # `replace_original: true` を返すと、Slack上の元のメッセージが書き換わりボタンが消えます
         return Response({
             "replace_original": True,
             "blocks": updated_blocks
