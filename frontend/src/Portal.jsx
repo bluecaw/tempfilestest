@@ -15,6 +15,14 @@ const PORTAL_SECTIONS = [
                 icon: '⚙️',
             },
             {
+                title: 'Slack ワークスペース',
+                url: 'https://app.slack.com/client',
+                description: '日報通知の確認および承認インタラクティブ操作',
+                badge: '共通',
+                badgeColor: 'badge-green',
+                icon: '💬',
+            },
+            {
                 title: 'REST API 参照 (DRF Root)',
                 url: 'https://report-django-backend.onrender.com/api/',
                 description: 'バックエンド API のエンドポイント動作確認',
@@ -66,6 +74,14 @@ const PORTAL_SECTIONS = [
         category: '🛠️ 外部 API & 開発ツール',
         description: 'APIキー・メールテスト・位置情報解析・使用量モニター・リポジトリ',
         links: [
+            {
+                title: 'Slack API Console',
+                url: 'https://api.slack.com/apps',
+                description: 'Slackアプリ（Webhook・インタラクティブコンポーネント）の管理設定',
+                badge: 'Slack API',
+                badgeColor: 'badge-blue',
+                icon: '🤖',
+            },
             {
                 title: '国土地理院 逆ジオコーディング API',
                 url: 'https://maps.gsi.go.jp/js/muni.js',
