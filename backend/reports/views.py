@@ -582,7 +582,7 @@ class TestNotificationView(APIView):
 
 
 class SlackActionWebhookView(APIView):
-    permission_classes = [AllowAny]  # SlackからのWebhookを受け取るため認証を緩和
+    permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
         payload_raw = request.data.get('payload')
@@ -597,51 +597,57 @@ class SlackActionWebhookView(APIView):
         action = actions[0]
         action_id = action.get('action_id')
         report_id = action.get('value')
-        user_name = payload.get('user', {}).get('username', '管理者')
+        
+        # Slackでボタンを押したユーザーの名前を取得
+        slack_user = payload.get('user', {}).get('name', '管理者')
 
         try:
             report = Report.objects.get(id=report_id)
         except Report.DoesNotExist:
             return Response({"text": "対象の日報が見つかりませんでした。"}, status=status.HTTP_200_OK)
 
-        # 二重送信・連打防止のチェック
+        # 1. 既に処理済みの場合は警告メッセージを返して終了（二重防止）
         if report.status in [Report.Status.APPROVED, Report.Status.REJECTED]:
             status_label = "承認済み" if report.status == Report.Status.APPROVED else "差し戻し済み"
             return Response({
-                "replace_original": True,
-                "text": f"⚠️ この日報は既に【{status_label}】処理が完了しています。"
+                "response_type": "ephemeral", # 本人のみに表示
+                "replace_original": False,
+                "text": f"⚠️ この日報は既に【{status_label}】処理されています。"
             }, status=status.HTTP_200_OK)
 
-        # ステータス変更処理
+        # 2. ステータス変更と表示テキストの作成
         if action_id == 'approve_report':
             report.status = Report.Status.APPROVED
-            status_text = f"✅ *{user_name}* さんがこの日報を *承認* しました。"
+            status_badge = f"🟢 *【承認済み】* (対応者: @{slack_user})"
         elif action_id == 'reject_report':
             report.status = Report.Status.REJECTED
-            status_text = f"🚫 *{user_name}* さんがこの日報を *差し戻し* ました。"
+            status_badge = f"🔴 *【差し戻し済み】* (対応者: @{slack_user})"
         else:
             return Response(status=status.HTTP_200_OK)
 
         report.save()
 
-        # メッセージをボタンなしの静的テキストに更新して連打を防止
-        updated_blocks = [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"📋 *日報「{report.title}」*\n作成者: {report.created_by.username}"
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": status_text
-                }
-            }
-        ]
+        # 3. 元のメッセージ（`payload['message']['blocks']`）を取得してボタン部分だけ差し替える
+        original_blocks = payload.get('message', {}).get('blocks', [])
+        updated_blocks = []
 
+        for block in original_blocks:
+            # ボタン（actions）のブロックを「処理済みテキスト」に置き換える
+            if block.get('type') == 'actions':
+                updated_blocks.append({
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": status_badge
+                        }
+                    ]
+                })
+            else:
+                # 日報の本文やタイトルなど、既存のブロックはそのまま残す
+                updated_blocks.append(block)
+
+        # `replace_original: True` でボタンが消え、ステータス表示に切り替わる
         return Response({
             "replace_original": True,
             "blocks": updated_blocks
