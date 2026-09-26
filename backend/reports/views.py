@@ -598,8 +598,9 @@ class SlackActionWebhookView(APIView):
         action_id = action.get('action_id')
         report_id = action.get('value')
         
-        # Slackでボタンを押したユーザーの名前を取得
-        slack_user = payload.get('user', {}).get('name', '管理者')
+        # Slackのpayload構造に合わせた安全な取得方法
+        user_info = payload.get('user', {})
+        slack_user = user_info.get('username') or user_info.get('name') or '管理者'
 
         try:
             report = Report.objects.get(id=report_id)
