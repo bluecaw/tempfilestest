@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
 # Render Build Script for Django Backend
 
-set -o errexit  # エラー発生時に即座に停止（set -e と同等）
+set -o errexit  # エラー発生時に即座に停止
 
 echo "=== Build Script Started ==="
 
-# カレントディレクトリに backend フォルダが存在する場合のみ移動
-if [ -d "backend" ]; then
-  echo "--- Moving to backend directory ---"
-  cd backend
+# requirements.txt の場所を正確に判定
+if [ -f "requirements.txt" ]; then
+  REQUIREMENTS_PATH="requirements.txt"
+elif [ -f "../requirements.txt" ]; then
   REQUIREMENTS_PATH="../requirements.txt"
 else
-  REQUIREMENTS_PATH="requirements.txt"
+  echo "ERROR: requirements.txt not found!"
+  exit 1
 fi
 
 echo "--- Upgrading pip and installing dependencies ---"
 python -m pip install --upgrade pip
-pip install -r "$REQUIREMENTS_PATH"
+pip install --default-timeout=100 -r "$REQUIREMENTS_PATH"
 
 echo "--- Collecting static files ---"
 python manage.py collectstatic --no-input
@@ -25,7 +26,6 @@ echo "--- Running migrations ---"
 python manage.py migrate
 
 echo "--- Creating superuser ---"
-# 環境変数 DJANGO_SUPERUSER_PASSWORD が設定されている場合のみスーパーユーザーを作成
 if [ -n "$DJANGO_SUPERUSER_PASSWORD" ]; then
   python manage.py shell -c "
 import os
