@@ -11,7 +11,7 @@ if [ -d "backend" ]; then
 fi
 
 echo "--- Installing dependencies ---"
-pip install -r requirements.txt
+pip install -r ../requirements.txt
 
 echo "--- Collecting static files ---"
 python manage.py collectstatic --no-input
