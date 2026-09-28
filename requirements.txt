@@ -45,7 +45,7 @@ typing_extensions==4.16.0
 tzdata==2026.4
 ujson==6.0.0
 urllib3==2.8.0
-uvicorn==0.53.0
+uvicorn==0.54.0
 whitenoise==6.12.0
 zope.interface==8.6
 django-filter==26.1
