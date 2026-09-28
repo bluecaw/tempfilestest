@@ -15,9 +15,9 @@ constantly==23.10.4
 cryptography==50.0.1
 daphne==4.2.3
 dj-database-url==3.1.2
-Django==5.2
+Django>=5.2
 django-cors-headers==4.9.0
-djangorestframework==3.17.2
+djangorestframework==3.18.1
 djangorestframework_simplejwt==5.5.1
 gunicorn==26.2.0
 h11==0.16.0
@@ -48,3 +48,5 @@ urllib3==2.8.0
 uvicorn==0.53.0
 whitenoise==6.12.0
 zope.interface==8.6
+django-filter==26.1
+reportlab==5.0.1
