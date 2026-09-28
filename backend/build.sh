@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 # Render Build Script for Django Backend
 
-set -e  # エラー発生時に即座に停止
+set -o errexit  # エラー発生時に即座に停止（set -e と同等）
 
 echo "=== Build Script Started ==="
 
 # カレントディレクトリに backend フォルダが存在する場合のみ移動
 if [ -d "backend" ]; then
+  echo "--- Moving to backend directory ---"
   cd backend
+  REQUIREMENTS_PATH="../requirements.txt"
+else
+  REQUIREMENTS_PATH="requirements.txt"
 fi
 
-echo "--- Installing dependencies ---"
-pip install -r ../requirements.txt
+echo "--- Upgrading pip and installing dependencies ---"
+python -m pip install --upgrade pip
+pip install -r "$REQUIREMENTS_PATH"
 
 echo "--- Collecting static files ---"
 python manage.py collectstatic --no-input
@@ -27,8 +32,8 @@ import os
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
-username = os.environ.get('DJANGO_SUPERUSER_USERNAME') or 'admin'
-email = os.environ.get('DJANGO_SUPERUSER_EMAIL') or 'admin@example.com'
+username = os.environ.get('DJANGO_SUPERUSER_USERNAME', 'admin')
+email = os.environ.get('DJANGO_SUPERUSER_EMAIL', 'admin@example.com')
 password = os.environ.get('DJANGO_SUPERUSER_PASSWORD')
 
 if not User.objects.filter(username=username).exists():
