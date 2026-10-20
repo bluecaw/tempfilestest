@@ -47,6 +47,6 @@ ujson==6.0.0
 urllib3==2.8.0
 uvicorn==0.54.0
 whitenoise==6.12.0
-zope.interface==8.6
+zope.interface==8.7
 django-filter==26.2
 reportlab==5.0.1
