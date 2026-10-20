@@ -42,7 +42,7 @@ sqlparse==0.6.0
 Twisted==26.4.0
 txaio==26.6.1
 typing_extensions==4.16.0
-tzdata==2026.4
+tzdata==2026.5
 ujson==6.0.0
 urllib3==2.8.0
 uvicorn==0.54.0
