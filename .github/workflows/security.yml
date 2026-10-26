@@ -27,4 +27,5 @@ jobs:
           pip install -r requirements.txt
           pip install pip-audit
       - name: Run pip-audit
-              run: pip-audit
+        run: |
+          pip-audit
