@@ -27,6 +27,4 @@ jobs:
           pip install -r requirements.txt
           pip install pip-audit
       - name: Run pip-audit
-        run: |
-          # CVE-2026-106454 (Twistedの未修正の脆弱性) は修正版が出るまで一時的に無視する
-          pip-audit --ignore-vuln CVE-2026-106454
+              run: pip-audit
