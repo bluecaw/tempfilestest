@@ -28,7 +28,7 @@ jmespath==1.1.0
 msgpack==1.2.3
 packaging==26.3
 psycopg2-binary==2.9.13
-pycparser==3.11
+pycparser==3.12
 PyJWT==2.15.1
 pyOpenSSL==26.4.0
 python-dateutil==2.9.0.post0
