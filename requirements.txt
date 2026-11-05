@@ -1,4 +1,4 @@
-asgiref==3.12.1
+asgiref==3.13.0
 attrs==26.1.0
 autobahn==26.10.1
 Automat==25.4.16
@@ -28,14 +28,14 @@ jmespath==1.1.0
 msgpack==1.2.3
 packaging==26.3
 psycopg2-binary==2.9.13
-pycparser==3.11
+pycparser==3.12
 PyJWT==2.15.1
 pyOpenSSL==26.4.0
 # python-dateutil==2.9.0.post0
 python-dotenv==1.2.3
 redis==8.1.0
 requests==2.34.2
-s3transfer==0.19.2
+s3transfer==0.19.3
 service-identity==26.1.0
 six==1.17.0
 sqlparse==0.6.0
